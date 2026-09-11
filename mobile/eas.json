@@ -1,0 +1,29 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://apisaverly.cyberneticde.site/api",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyD5cJ15r22wO3m4k80M9RznHze3Fz2Gve0",
+        "EXPO_PUBLIC_GEMINI_MODEL": "gemini-2.5-flash"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://apisaverly.cyberneticde.site/api",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyD5cJ15r22wO3m4k80M9RznHze3Fz2Gve0",
+        "EXPO_PUBLIC_GEMINI_MODEL": "gemini-2.5-flash"
+      }
+    }
+  }
+}
