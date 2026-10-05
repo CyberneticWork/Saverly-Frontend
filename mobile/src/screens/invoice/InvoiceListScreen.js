@@ -49,7 +49,7 @@ export default function InvoiceListScreen({ navigation }) {
   const renderInvoice = ({ item }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => item.status === 'REVIEW' && navigation.navigate('InvoiceReview', { invoiceId: item.id })}
+      onPress={() => navigation.navigate('InvoiceReview', { invoiceId: item.id })}
       activeOpacity={0.8}
     >
       <View style={styles.cardLeft}>
@@ -57,7 +57,9 @@ export default function InvoiceListScreen({ navigation }) {
           <Ionicons name="receipt-outline" size={22} color={STATUS_COLORS[item.status]} />
         </View>
         <View style={styles.cardInfo}>
-          <Text style={styles.storeName} numberOfLines={1}>{item.storeName || 'Unknown Store'}</Text>
+          <Text style={styles.storeName} numberOfLines={1}>
+            {item.storeName || item.supermarket?.name || item.parsedData?.storeName || 'Unknown Store'}
+          </Text>
           <Text style={styles.cardDate}>{new Date(item.createdAt).toLocaleDateString()}</Text>
           <Text style={styles.itemCount}>{item._count?.items || 0} items extracted</Text>
         </View>
@@ -69,9 +71,7 @@ export default function InvoiceListScreen({ navigation }) {
             {STATUS_LABELS[item.status]}
           </Text>
         </View>
-        {item.status === 'REVIEW' && (
-          <Ionicons name="chevron-forward" size={16} color={colors.textLight} style={{ marginTop: 6 }} />
-        )}
+        <Ionicons name="chevron-forward" size={16} color={colors.textLight} style={{ marginTop: 6 }} />
       </View>
     </TouchableOpacity>
   );

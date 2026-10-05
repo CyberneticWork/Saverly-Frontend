@@ -10,9 +10,9 @@ import {
 } from '@heroicons/react/24/outline';
 
 const STATUS_META = {
-  PENDING:    { bg: 'bg-amber-50',   text: 'text-amber-700',  dot: 'bg-amber-400',  label: 'Pending' },
+  PENDING:    { bg: 'bg-amber-50',   text: 'text-amber-700',  dot: 'bg-amber-400',  label: 'Draft (Unsubmitted)' },
   PROCESSING: { bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-400',   label: 'Processing' },
-  REVIEW:     { bg: 'bg-violet-50',  text: 'text-violet-700', dot: 'bg-violet-400', label: 'Review' },
+  REVIEW:     { bg: 'bg-violet-50',  text: 'text-violet-700', dot: 'bg-violet-400', label: 'Under Review' },
   VERIFIED:   { bg: 'bg-emerald-50', text: 'text-emerald-700',dot: 'bg-emerald-400',label: 'Verified' },
   REJECTED:   { bg: 'bg-red-50',     text: 'text-red-600',    dot: 'bg-red-400',    label: 'Rejected' },
 };
@@ -45,7 +45,12 @@ export default function Invoices() {
   );
 
   const verifyMut = useMutation((id) => api.put(`/invoices/admin/${id}/verify`), {
-    onSuccess: () => { qc.invalidateQueries('invoices'); setSelected(null); toast.success('Invoice verified & prices updated'); },
+    onSuccess: () => {
+      qc.invalidateQueries('invoices');
+      qc.invalidateQueries('prices');
+      setSelected(null);
+      toast.success('Invoice verified & prices updated');
+    },
     onError: (e) => toast.error(e?.response?.data?.message || 'Failed to verify'),
   });
   const rejectMut = useMutation(({ id, reason }) => api.put(`/invoices/admin/${id}/reject`, { reason }), {
@@ -69,7 +74,7 @@ export default function Invoices() {
 
   const invoices = data?.data || [];
   const meta = data?.pagination || {};
-  const FILTER_TABS = ['', 'PENDING', 'REVIEW', 'VERIFIED', 'REJECTED'];
+  const FILTER_TABS = ['', 'REVIEW', 'VERIFIED', 'REJECTED', 'PENDING'];
 
   const handleSaveEdit = () => {
     if (!editingItem || !selected) return;
@@ -135,7 +140,7 @@ export default function Invoices() {
               <tr key={inv.id} className="hover:bg-gray-50/60 transition-colors group">
                 <td className="px-5 py-4">
                   <p className="font-semibold text-gray-900 group-hover:text-primary transition-colors">
-                    {inv.supermarket?.name || inv.parsedData?.storeName || 'Unknown Store'}
+                    {inv.storeName || inv.supermarket?.name || inv.parsedData?.storeName || 'Unknown Store'}
                   </p>
                   <p className="text-gray-400 text-xs mt-0.5">{inv.user?.name} · {inv.user?.email}</p>
                 </td>
@@ -159,7 +164,7 @@ export default function Invoices() {
                     >
                       <MagnifyingGlassIcon className="w-3.5 h-3.5" /> Review
                     </button>
-                    {(inv.status === 'REVIEW' || inv.status === 'PENDING') && (
+                    {inv.status === 'REVIEW' && (
                       <>
                         <button onClick={() => verifyMut.mutate(inv.id)} disabled={verifyMut.isLoading}
                           className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50" title="Verify">

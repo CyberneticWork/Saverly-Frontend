@@ -1,16 +1,18 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  ActivityIndicator, Image, ScrollView,
+  ActivityIndicator, Image, ScrollView, Platform,
+  StatusBar, BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { CameraView, Camera } from 'expo-camera';
 import { invoicesAPI } from '../../services/api';
 import { colors, typography, shadows } from '../../theme';
+import ReceiptCropperModal from '../../components/ReceiptCropperModal';
 
 // ── On-device structured extraction via Gemini Vision ───────────────────────
 // One single Gemini call returns JSON directly — no text→parse round-trip needed.
@@ -91,36 +93,154 @@ function extractInvoiceIdFromResponse(res) {
 }
 
 export default function InvoiceScanScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState('picker'); // 'picker' | 'camera'
   const [hasPermission, setHasPermission] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [originalImage, setOriginalImage] = useState(null);
+  const [isCropperVisible, setIsCropperVisible] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const cameraRef = useRef(null);
 
+  // Dynamically hide stack navigation header and bottom tab bar when in full-screen live camera mode
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: mode !== 'camera',
+    });
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.setOptions({
+        tabBarStyle: mode === 'camera' ? { display: 'none' } : undefined,
+      });
+    }
+    return () => {
+      navigation.setOptions({ headerShown: true });
+      if (parent) {
+        parent.setOptions({ tabBarStyle: undefined });
+      }
+    };
+  }, [navigation, mode]);
+
+  // Handle hardware back press on Android in camera mode
+  useEffect(() => {
+    if (mode === 'camera') {
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+        setMode('picker');
+        return true;
+      });
+      return () => backHandler.remove();
+    }
+  }, [mode]);
+
+  const handleImageSelected = (uri) => {
+    if (!uri) return;
+    setOriginalImage(uri);
+    setSelectedImage(uri);
+    setMode('picker');
+    Alert.alert(
+      'Receipt Captured',
+      'Would you like to crop and straighten the receipt before scanning?',
+      [
+        { text: 'Crop Receipt', onPress: () => setIsCropperVisible(true) },
+        { text: 'Continue as is', style: 'default' },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const handleQuickRotate = async () => {
+    if (!selectedImage) return;
+    try {
+      const res = await ImageManipulator.manipulateAsync(
+        selectedImage,
+        [{ rotate: 90 }],
+        { compress: 0.95, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      setSelectedImage(res.uri);
+    } catch (err) {
+      console.warn('Quick rotate failed:', err);
+    }
+  };
+
+  const takeWithNativeCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Camera access is needed to photograph your receipt.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false, // Capture full uncropped receipt
+        quality: 0.9,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        handleImageSelected(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.error('System camera error:', err);
+      Alert.alert('Camera error', 'Failed to open camera.');
+    }
+  };
+
   const requestCamera = async () => {
-    const { status } = await Camera.requestCameraPermissionsAsync();
-    setHasPermission(status === 'granted');
-    if (status === 'granted') setMode('camera');
-    else Alert.alert('Permission denied', 'Camera access is needed to scan receipts.');
+    try {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+      if (status === 'granted') {
+        setMode('camera');
+      } else {
+        Alert.alert(
+          'Camera Permission',
+          'Camera access is needed to scan receipts. You can also use the system camera or choose from gallery.',
+          [
+            { text: 'System Camera', onPress: takeWithNativeCamera },
+            { text: 'Choose from Gallery', onPress: pickImage },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+      }
+    } catch (err) {
+      console.warn('requestCamera error:', err);
+      takeWithNativeCamera();
+    }
   };
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false, // Keep full receipt image
       quality: 0.9,
-      allowsEditing: true,
     });
-    if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0].uri);
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      handleImageSelected(result.assets[0].uri);
     }
   };
 
   const takePicture = async () => {
-    if (!cameraRef.current) return;
-    const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
-    setSelectedImage(photo.uri);
-    setMode('picker');
+    if (!cameraRef.current || isCapturing) return;
+    try {
+      setIsCapturing(true);
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
+      if (photo?.uri) {
+        handleImageSelected(photo.uri);
+      }
+    } catch (err) {
+      console.error('Take picture error:', err);
+      Alert.alert(
+        'Capture Failed',
+        'Could not capture photo using in-app camera. Would you like to use the system camera?',
+        [
+          { text: 'Use System Camera', onPress: takeWithNativeCamera },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    } finally {
+      setIsCapturing(false);
+    }
   };
 
   const handleUpload = async () => {
@@ -128,26 +248,67 @@ export default function InvoiceScanScreen({ navigation }) {
     setIsUploading(true);
     setUploadStatus('Preparing image…');
     try {
-      // Resize to 1600px — enough detail for Gemini, keeps base64 size manageable
-      const img = await ImageManipulator.manipulateAsync(
-        selectedImage,
-        [{ resize: { width: 1600 } }],
-        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-      );
+      const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+      let invoiceId = null;
 
-      // Single Gemini call → structured JSON directly (no text→re-parse needed)
-      setUploadStatus('Reading invoice…');
-      const structured = await extractStructuredWithGemini(img.base64);
+      // 1. Try on-device Gemini if an API key is configured
+      if (apiKey && apiKey.trim().length > 0) {
+        try {
+          setUploadStatus('Optimizing image…');
+          let base64 = null;
+          try {
+            const img = await ImageManipulator.manipulateAsync(
+              selectedImage,
+              [{ resize: { width: 1600 } }],
+              { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+            );
+            base64 = img.base64;
+          } catch (manipErr) {
+            console.warn('ImageManipulator error, skipping client Gemini:', manipErr);
+          }
 
-      // Send pre-parsed data straight to server — server just saves, no AI needed
-      setUploadStatus('Saving…');
-      const res = await invoicesAPI.scanStructured(structured);
-      const invoiceId = extractInvoiceIdFromResponse(res);
+          if (base64) {
+            setUploadStatus('Reading invoice with Gemini…');
+            const structured = await extractStructuredWithGemini(base64);
+            setUploadStatus('Saving…');
+            const res = await invoicesAPI.scanStructured(structured);
+            invoiceId = extractInvoiceIdFromResponse(res);
+          }
+        } catch (geminiErr) {
+          console.warn('Client Gemini failed, falling back to server OCR:', geminiErr?.message || geminiErr);
+        }
+      }
+
+      // 2. Fallback to Server-Side OCR (Tesseract / Server pipeline)
+      if (!invoiceId) {
+        setUploadStatus('Uploading to server OCR…');
+        const formData = new FormData();
+        if (Platform.OS === 'web') {
+          const resp = await fetch(selectedImage);
+          const blob = await resp.blob();
+          formData.append('invoice', blob, 'receipt.jpg');
+        } else {
+          formData.append('invoice', {
+            uri: selectedImage,
+            name: 'receipt.jpg',
+            type: 'image/jpeg',
+          });
+        }
+
+        const res = await invoicesAPI.scan(formData);
+        invoiceId = extractInvoiceIdFromResponse(res);
+      }
 
       if (!invoiceId) throw new Error('Unexpected response from server.');
       navigation.replace('InvoiceReview', { invoiceId });
     } catch (err) {
-      Alert.alert('Scan failed', err?.response?.data?.message || err?.message || 'Please try again.');
+      console.error('Scan error:', err);
+      const msg = err?.response?.data?.message || err?.message || 'Please try again.';
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(`Scan failed: ${msg}`);
+      } else {
+        Alert.alert('Scan failed', msg);
+      }
     } finally {
       setIsUploading(false);
       setUploadStatus('');
@@ -157,29 +318,119 @@ export default function InvoiceScanScreen({ navigation }) {
   if (mode === 'camera') {
     return (
       <View style={styles.cameraContainer}>
-        <CameraView style={styles.camera} facing="back" ref={cameraRef}>
-          <View style={styles.cameraOverlay}>
-            <View style={styles.cameraCornerTL} />
-            <View style={styles.cameraCornerTR} />
-            <View style={styles.cameraCornerBL} />
-            <View style={styles.cameraCornerBR} />
-          </View>
-          <View style={styles.cameraControls}>
-            <TouchableOpacity style={styles.cameraBtn} onPress={() => setMode('picker')}>
-              <Ionicons name="close" size={28} color="#fff" />
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          enableTorch={torchOn}
+          ref={cameraRef}
+        />
+
+        {/* Fullscreen UI Overlay positioned on top of the native camera preview */}
+        <View style={styles.cameraUI} pointerEvents="box-none">
+          {/* Top Controls Bar */}
+          <View style={[styles.cameraTopBar, { paddingTop: Math.max(insets.top + 8, 54) }]}>
+            <TouchableOpacity
+              style={styles.cameraRoundBtn}
+              onPress={() => setMode('picker')}
+              activeOpacity={0.7}
+              accessibilityLabel="Close camera"
+            >
+              <Ionicons name="close" size={26} color="#fff" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.captureBtn} onPress={takePicture}>
-              <View style={styles.captureInner} />
+
+            <View style={styles.cameraTitlePill}>
+              <Ionicons name="receipt-outline" size={16} color="#fff" />
+              <Text style={styles.cameraTitleText}>Receipt Scanner</Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.cameraRoundBtn, torchOn && styles.cameraRoundBtnActive]}
+              onPress={() => setTorchOn(prev => !prev)}
+              activeOpacity={0.7}
+              accessibilityLabel="Toggle flash"
+            >
+              <Ionicons name={torchOn ? 'flash' : 'flash-off'} size={22} color={torchOn ? '#FFD54F' : '#fff'} />
             </TouchableOpacity>
-            <View style={{ width: 52 }} />
           </View>
-        </CameraView>
+
+          {/* Viewfinder Receipt Frame */}
+          <View style={styles.cameraFrameWrapper} pointerEvents="none">
+            <View style={styles.cameraFrame}>
+              <View style={styles.cornerTL} />
+              <View style={styles.cornerTR} />
+              <View style={styles.cornerBL} />
+              <View style={styles.cornerBR} />
+            </View>
+            <View style={styles.cameraHintBadge}>
+              <Ionicons name="scan-outline" size={15} color="#fff" />
+              <Text style={styles.cameraHintText}>Position receipt inside frame</Text>
+            </View>
+          </View>
+
+          {/* Bottom Shutter & Actions Bar */}
+          <View style={[styles.cameraBottomBar, { paddingBottom: Math.max(insets.bottom + 12, 34) }]}>
+            <TouchableOpacity
+              style={styles.cameraActionBtn}
+              onPress={takeWithNativeCamera}
+              activeOpacity={0.7}
+              accessibilityLabel="Use system camera"
+            >
+              <View style={styles.cameraActionIcon}>
+                <Ionicons name="camera-outline" size={24} color="#fff" />
+              </View>
+              <Text style={styles.cameraActionLabel}>System</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shutterBtnOuter}
+              onPress={takePicture}
+              disabled={isCapturing}
+              activeOpacity={0.8}
+              accessibilityLabel="Take photo"
+            >
+              <View style={styles.shutterBtnInner}>
+                {isCapturing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="camera" size={32} color="#fff" />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cameraActionBtn}
+              onPress={() => {
+                setMode('picker');
+                pickImage();
+              }}
+              activeOpacity={0.7}
+              accessibilityLabel="Pick from gallery"
+            >
+              <View style={styles.cameraActionIcon}>
+                <Ionicons name="images-outline" size={24} color="#fff" />
+              </View>
+              <Text style={styles.cameraActionLabel}>Gallery</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
+
+      {/* Interactive Receipt Cropper Modal */}
+      <ReceiptCropperModal
+        visible={isCropperVisible}
+        imageUri={selectedImage || originalImage}
+        onClose={() => setIsCropperVisible(false)}
+        onSaveCrop={(croppedUri) => {
+          setSelectedImage(croppedUri);
+        }}
+      />
+
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <LinearGradient colors={['#1B5E20', '#2E7D32']} style={styles.hero}>
           <Text style={styles.heroIcon}>📄</Text>
@@ -189,28 +440,103 @@ export default function InvoiceScanScreen({ navigation }) {
 
         {selectedImage ? (
           <View style={styles.previewContainer}>
-            <Image source={{ uri: selectedImage }} style={styles.previewImage} resizeMode="contain" />
-            <TouchableOpacity style={styles.retakeBtn} onPress={() => setSelectedImage(null)}>
-              <Ionicons name="refresh" size={18} color={colors.primary} />
-              <Text style={styles.retakeText}>Choose different image</Text>
-            </TouchableOpacity>
+            <View style={styles.previewImageCard}>
+              <Image source={{ uri: selectedImage }} style={styles.previewImage} resizeMode="contain" />
+              {originalImage && originalImage !== selectedImage && (
+                <View style={styles.croppedBadge}>
+                  <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                  <Text style={styles.croppedBadgeText}>Cropped</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Quick Actions Row */}
+            <View style={styles.previewActionsGrid}>
+              <TouchableOpacity
+                style={styles.cropPrimaryBtn}
+                onPress={() => setIsCropperVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="crop" size={18} color="#fff" />
+                <Text style={styles.cropPrimaryBtnText}>Crop & Adjust</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cropSecondaryBtn}
+                onPress={handleQuickRotate}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="reload" size={18} color={colors.primary} />
+                <Text style={styles.cropSecondaryBtnText}>Rotate 90°</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.previewSubActionsRow}>
+              {originalImage && originalImage !== selectedImage && (
+                <TouchableOpacity
+                  style={styles.previewSubBtn}
+                  onPress={() => setSelectedImage(originalImage)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="arrow-undo-outline" size={16} color={colors.textSecondary} />
+                  <Text style={styles.previewSubBtnText}>Reset to Original</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.previewSubBtn}
+                onPress={() => {
+                  setSelectedImage(null);
+                  setOriginalImage(null);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="refresh" size={16} color={colors.textSecondary} />
+                <Text style={styles.previewSubBtnText}>Choose Different Image</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <View style={styles.options}>
-            <TouchableOpacity style={styles.optionCard} onPress={requestCamera} activeOpacity={0.8}>
+            {/* 1. Direct Native Camera (Recommended & Most Reliable) */}
+            <TouchableOpacity style={styles.optionCard} onPress={takeWithNativeCamera} activeOpacity={0.8}>
               <LinearGradient colors={['#1B5E20', '#2E7D32']} style={styles.optionIcon}>
                 <Ionicons name="camera" size={32} color="#fff" />
               </LinearGradient>
-              <Text style={styles.optionTitle}>Take a Photo</Text>
-              <Text style={styles.optionSub}>Use camera to photograph your receipt</Text>
+              <View style={styles.optionInfo}>
+                <View style={styles.optionTitleRow}>
+                  <Text style={styles.optionTitle}>Take a Photo</Text>
+                  <View style={styles.recommendedBadge}>
+                    <Text style={styles.recommendedText}>Recommended</Text>
+                  </View>
+                </View>
+                <Text style={styles.optionSub}>Opens camera with native shutter button</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
             </TouchableOpacity>
 
+            {/* 2. In-App Live Scanner */}
+            <TouchableOpacity style={styles.optionCard} onPress={requestCamera} activeOpacity={0.8}>
+              <LinearGradient colors={['#00796B', '#00897B']} style={styles.optionIcon}>
+                <Ionicons name="scan-outline" size={32} color="#fff" />
+              </LinearGradient>
+              <View style={styles.optionInfo}>
+                <Text style={styles.optionTitle}>Live Scanner View</Text>
+                <Text style={styles.optionSub}>In-app viewfinder with receipt framing guide</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+
+            {/* 3. Choose from Gallery */}
             <TouchableOpacity style={styles.optionCard} onPress={pickImage} activeOpacity={0.8}>
               <LinearGradient colors={['#0277BD', '#0288D1']} style={styles.optionIcon}>
                 <Ionicons name="image" size={32} color="#fff" />
               </LinearGradient>
-              <Text style={styles.optionTitle}>Choose from Gallery</Text>
-              <Text style={styles.optionSub}>Select a receipt photo from your library</Text>
+              <View style={styles.optionInfo}>
+                <Text style={styles.optionTitle}>Choose from Gallery</Text>
+                <Text style={styles.optionSub}>Select a receipt photo from your library</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
             </TouchableOpacity>
           </View>
         )}
@@ -267,29 +593,289 @@ export default function InvoiceScanScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  cameraContainer: { flex: 1 },
-  camera: { flex: 1, justifyContent: 'flex-end' },
-  cameraOverlay: { position: 'absolute', top: '20%', left: '10%', right: '10%', bottom: '30%' },
-  cameraCornerTL: { position: 'absolute', top: 0, left: 0, width: 30, height: 30, borderTopWidth: 3, borderLeftWidth: 3, borderColor: '#fff', borderRadius: 2 },
-  cameraCornerTR: { position: 'absolute', top: 0, right: 0, width: 30, height: 30, borderTopWidth: 3, borderRightWidth: 3, borderColor: '#fff', borderRadius: 2 },
-  cameraCornerBL: { position: 'absolute', bottom: 0, left: 0, width: 30, height: 30, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: '#fff', borderRadius: 2 },
-  cameraCornerBR: { position: 'absolute', bottom: 0, right: 0, width: 30, height: 30, borderBottomWidth: 3, borderRightWidth: 3, borderColor: '#fff', borderRadius: 2 },
-  cameraControls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingBottom: 40 },
-  cameraBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  captureBtn: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
-  captureInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.primary },
+  cameraContainer: { flex: 1, backgroundColor: '#000' },
+  cameraUI: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+    zIndex: 100,
+    elevation: 100,
+  },
+  cameraTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    zIndex: 110,
+  },
+  cameraRoundBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  cameraRoundBtnActive: {
+    backgroundColor: 'rgba(255,213,79,0.35)',
+    borderColor: '#FFD54F',
+  },
+  cameraTitlePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  cameraTitleText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  cameraFrameWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    paddingVertical: 8,
+  },
+  cameraFrame: {
+    width: '84%',
+    height: '75%',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    position: 'relative',
+    backgroundColor: 'rgba(0,0,0,0.04)',
+  },
+  cornerTL: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    width: 36,
+    height: 36,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderColor: '#10B981',
+    borderTopLeftRadius: 20,
+  },
+  cornerTR: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 36,
+    height: 36,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderColor: '#10B981',
+    borderTopRightRadius: 20,
+  },
+  cornerBL: {
+    position: 'absolute',
+    bottom: -2,
+    left: -2,
+    width: 36,
+    height: 36,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderColor: '#10B981',
+    borderBottomLeftRadius: 20,
+  },
+  cornerBR: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 36,
+    height: 36,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderColor: '#10B981',
+    borderBottomRightRadius: 20,
+  },
+  cameraHintBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  cameraHintText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cameraBottomBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    zIndex: 110,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingTop: 18,
+  },
+  shutterBtnOuter: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    borderWidth: 4,
+    borderColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  shutterBtnInner: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    backgroundColor: colors.primary || '#1B5E20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraActionBtn: {
+    alignItems: 'center',
+    gap: 6,
+    width: 68,
+  },
+  cameraActionIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  cameraActionLabel: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   content: { paddingBottom: 100 },
   hero: { padding: 32, alignItems: 'center' },
   heroIcon: { fontSize: 56, marginBottom: 12 },
   heroTitle: { ...typography.h2, color: '#fff', textAlign: 'center' },
   heroSub: { ...typography.body, color: 'rgba(255,255,255,0.85)', textAlign: 'center', marginTop: 8 },
-  previewContainer: { padding: 20, alignItems: 'center' },
-  previewImage: { width: '100%', height: 300, borderRadius: 16 },
-  retakeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
-  retakeText: { ...typography.body, color: colors.primary, fontWeight: '600' },
+  previewContainer: { padding: 20, alignItems: 'center', gap: 14 },
+  previewImageCard: {
+    width: '100%',
+    height: 320,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    ...shadows.sm,
+  },
+  previewImage: { width: '100%', height: '100%' },
+  croppedBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    ...shadows.xs,
+  },
+  croppedBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  previewActionsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  cropPrimaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 14,
+    ...shadows.sm,
+  },
+  cropPrimaryBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  cropSecondaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  cropSecondaryBtnText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  previewSubActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
+  previewSubBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  previewSubBtnText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
   options: { padding: 20, gap: 16 },
-  optionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 20, ...shadows.sm, gap: 16 },
-  optionIcon: { width: 60, height: 60, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  optionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 18, ...shadows.sm, gap: 14 },
+  optionIcon: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  optionInfo: { flex: 1 },
+  optionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  recommendedBadge: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  recommendedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2E7D32',
+  },
   optionTitle: { ...typography.h4, color: colors.text },
   optionSub: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   tipsCard: { margin: 20, backgroundColor: '#E8F5E9', borderRadius: 16, padding: 16, gap: 8 },

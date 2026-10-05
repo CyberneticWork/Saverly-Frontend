@@ -15,13 +15,15 @@ export default function PriceRecords() {
   const { data: supermarkets } = useQuery('supermarkets-list', () => api.get('/supermarkets').then(r => r.data.data));
 
   const prices = data?.data || [];
-  const meta = data?.meta || {};
+  const meta = data?.meta || data?.pagination || {};
+  const totalCount = meta.total || 0;
+  const totalPages = meta.totalPages || meta.pages || 1;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Price Records</h1>
-        <p className="text-gray-500">{meta.total || 0} total price records</p>
+        <p className="text-gray-500">{totalCount} total price records</p>
       </div>
 
       <div className="mb-4">
@@ -63,7 +65,7 @@ export default function PriceRecords() {
                 </td>
                 <td className="px-6 py-4">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                    p.stockStatus === 'IN_STOCK' ? 'bg-green-100 text-green-700' :
+                    (!p.stockStatus || p.stockStatus === 'IN_STOCK') ? 'bg-green-100 text-green-700' :
                     p.stockStatus === 'LOW_STOCK' ? 'bg-yellow-100 text-yellow-700' :
                     'bg-red-100 text-red-700'
                   }`}>
@@ -80,11 +82,11 @@ export default function PriceRecords() {
         </table>
       </div>
 
-      {meta.totalPages > 1 && (
+      {totalPages > 1 && (
         <div className="flex justify-center gap-2 mt-4">
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="px-4 py-2 border rounded-xl disabled:opacity-40 hover:bg-gray-50">Prev</button>
-          <span className="px-4 py-2 text-gray-600">Page {page} of {meta.totalPages}</span>
-          <button disabled={page >= meta.totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 border rounded-xl disabled:opacity-40 hover:bg-gray-50">Next</button>
+          <span className="px-4 py-2 text-gray-600">Page {page} of {totalPages}</span>
+          <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 border rounded-xl disabled:opacity-40 hover:bg-gray-50">Next</button>
         </div>
       )}
     </div>

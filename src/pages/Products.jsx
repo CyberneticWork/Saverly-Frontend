@@ -1,19 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import api from '../services/api';
 import toast from 'react-hot-toast';
-import { MagnifyingGlassIcon, PlusIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, PlusIcon, PencilSquareIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 export default function Products() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', brand: '', description: '', defaultUnit: 'unit', categoryId: '' });
 
-  const { data } = useQuery(['products', page, search], () =>
-    api.get('/products', { params: { page, limit: 20, search: search || undefined } }).then(r => r.data),
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const { data, isLoading } = useQuery(['products', page, debouncedSearch], () =>
+    api.get('/products', { params: { page, limit: 20, search: debouncedSearch || undefined } }).then(r => r.data),
     { keepPreviousData: true }
   );
   const { data: categories } = useQuery('categories', () => api.get('/categories').then(r => r.data.data));
@@ -49,14 +58,16 @@ export default function Products() {
   };
 
   const products = data?.data || [];
-  const meta = data?.meta || {};
+  const meta = data?.meta || data?.pagination || {};
+  const totalCount = meta.total !== undefined ? meta.total : products.length;
+  const totalPages = meta.totalPages || meta.pages || 1;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Products</h1>
-          <p className="text-gray-500">{meta.total || 0} total products</p>
+          <p className="text-gray-500">{totalCount} total products</p>
         </div>
         <button onClick={openCreate} className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl font-medium hover:bg-primary-dark transition-colors">
           <PlusIcon className="w-5 h-5" /> Add Product
@@ -68,10 +79,19 @@ export default function Products() {
         <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
         <input
           value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Search products..."
-          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search products by name, brand, or description..."
+          className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         />
+        {search && (
+          <button
+            onClick={() => { setSearch(''); setDebouncedSearch(''); setPage(1); }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100"
+            title="Clear search"
+          >
+            <XMarkIcon className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -119,11 +139,11 @@ export default function Products() {
       </div>
 
       {/* Pagination */}
-      {meta.totalPages > 1 && (
+      {totalPages > 1 && (
         <div className="flex justify-center gap-2 mt-4">
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="px-4 py-2 border rounded-xl disabled:opacity-40 hover:bg-gray-50">Prev</button>
-          <span className="px-4 py-2 text-gray-600">Page {page} of {meta.totalPages}</span>
-          <button disabled={page >= meta.totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 border rounded-xl disabled:opacity-40 hover:bg-gray-50">Next</button>
+          <span className="px-4 py-2 text-gray-600">Page {page} of {totalPages}</span>
+          <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 border rounded-xl disabled:opacity-40 hover:bg-gray-50">Next</button>
         </div>
       )}
 
