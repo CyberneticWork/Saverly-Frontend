@@ -7,10 +7,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Audio } from 'expo-av';
 import { productsAPI, categoriesAPI, invoicesAPI } from '../../services/api';
 import { colors, typography, shadows } from '../../theme';
 import ProductCard from '../../components/product/ProductCard';
+
+const getAudioModule = () => {
+  try {
+    // Lazy require so app doesn't crash on startup if native module is absent (e.g. Expo Go)
+    const expoAv = require('expo-av');
+    return expoAv?.Audio || null;
+  } catch {
+    return null;
+  }
+};
 
 export default function SearchScreen({ navigation, route }) {
   const [query, setQuery] = useState(route.params?.query || '');
@@ -86,6 +95,11 @@ export default function SearchScreen({ navigation, route }) {
   // ── Voice Recognition ──────────────────────────────────────────────────────
   const startVoiceRecording = async () => {
     try {
+      const Audio = getAudioModule();
+      if (!Audio) {
+        Alert.alert('Notice', 'Voice search is unavailable in Expo Go. Please type your search query.');
+        return;
+      }
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission needed', 'Microphone permission is required for voice search.');
@@ -99,7 +113,7 @@ export default function SearchScreen({ navigation, route }) {
       setIsRecording(true);
       setVoiceHint('Listening… speak now');
     } catch (err) {
-      Alert.alert('Error', 'Could not start recording. Please try again.');
+      Alert.alert('Notice', 'Voice search is currently unavailable. Please type your search query.');
     }
   };
 

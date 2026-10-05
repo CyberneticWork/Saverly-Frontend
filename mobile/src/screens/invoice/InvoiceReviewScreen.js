@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, TextInput, Alert, ScrollView,
@@ -11,11 +11,19 @@ import { colors, typography, shadows } from '../../theme';
 export default function InvoiceReviewScreen({ navigation, route }) {
   const invoiceId = route?.params?.invoiceId;
   const [invoice, setInvoice] = useState(null);
+  const [storeName, setStoreName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [items, setItems] = useState([]);
-  const pollRef = React.useRef(null);
+  const pollRef = useRef(null);
+
+  const isSubmittedRef = useRef(false);
+  const isDiscardingRef = useRef(false);
+
+  const isAlreadySubmitted = Boolean(
+    invoice && invoice.status && invoice.status !== 'PENDING' && invoice.status !== 'PROCESSING'
+  );
 
   useEffect(() => {
     if (!invoiceId) {
@@ -27,6 +35,42 @@ export default function InvoiceReviewScreen({ navigation, route }) {
     loadInvoice();
     return () => { if (pollRef.current) clearTimeout(pollRef.current); };
   }, [invoiceId]);
+
+  // Intercept back navigation so unsubmitted scans can be discarded
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (isSubmittedRef.current || isDiscardingRef.current || isAlreadySubmitted) {
+        return;
+      }
+
+      e.preventDefault();
+
+      Alert.alert(
+        'Discard Receipt?',
+        'You have not submitted this receipt yet. Are you sure you want to discard it?',
+        [
+          { text: 'Keep Reviewing', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: async () => {
+              isDiscardingRef.current = true;
+              try {
+                if (invoiceId) {
+                  await invoicesAPI.remove(invoiceId);
+                }
+              } catch (err) {
+                console.warn('Failed to discard invoice:', err);
+              }
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ]
+      );
+    });
+
+    return unsubscribe;
+  }, [navigation, invoiceId, isAlreadySubmitted]);
 
   const loadInvoice = async (attempt = 0) => {
     try {
@@ -47,6 +91,7 @@ export default function InvoiceReviewScreen({ navigation, route }) {
       }
       setIsProcessing(false);
       setInvoice(data);
+      setStoreName(data.storeName || data.supermarket?.name || data.parsedData?.storeName || '');
       setItems(data.items || []);
     } catch (err) {
       Alert.alert('Error', err?.response?.data?.message || err?.message || 'Could not load invoice.');
@@ -54,6 +99,29 @@ export default function InvoiceReviewScreen({ navigation, route }) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDiscard = async () => {
+    isDiscardingRef.current = true;
+    try {
+      if (invoiceId) {
+        await invoicesAPI.remove(invoiceId);
+      }
+    } catch (err) {
+      console.warn('Failed to delete discarded invoice:', err);
+    }
+    navigation.goBack();
+  };
+
+  const confirmDiscard = () => {
+    Alert.alert(
+      'Discard Receipt?',
+      'You have not submitted this receipt yet. Are you sure you want to discard it?',
+      [
+        { text: 'Keep Reviewing', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: handleDiscard },
+      ]
+    );
   };
 
   const handleUpdateItem = (index, field, value) => {
@@ -75,7 +143,6 @@ export default function InvoiceReviewScreen({ navigation, route }) {
   const handleConfirm = async () => {
     setIsConfirming(true);
     try {
-      // Normalise field names before sending — ensure productName and unitPrice are set
       const payload = items.map(item => ({
         ...item,
         productName: item.productName || item.rawName || '',
@@ -83,7 +150,8 @@ export default function InvoiceReviewScreen({ navigation, route }) {
         totalPrice: parseFloat(item.totalPrice) || parseFloat(item.unitPrice) || 0,
         quantity: parseFloat(item.quantity) || 1,
       }));
-      await invoicesAPI.confirm(invoiceId, { items: payload });
+      await invoicesAPI.confirm(invoiceId, { storeName: storeName.trim(), items: payload });
+      isSubmittedRef.current = true;
       Alert.alert(
         'Submitted!',
         'Your receipt has been submitted. Our team will verify the prices and update the database.',
@@ -113,7 +181,9 @@ export default function InvoiceReviewScreen({ navigation, route }) {
       <View style={styles.infoBar}>
         <View style={styles.infoItem}>
           <Ionicons name="storefront-outline" size={16} color={colors.primary} />
-          <Text style={styles.infoText}>{invoice?.storeName || 'Store detected'}</Text>
+          <Text style={styles.infoText}>
+            {storeName || invoice?.supermarket?.name || 'Store detected'}
+          </Text>
         </View>
         {invoice?.purchaseDate && (
           <View style={styles.infoItem}>
@@ -129,11 +199,45 @@ export default function InvoiceReviewScreen({ navigation, route }) {
         )}
       </View>
 
-      <View style={styles.instructionBar}>
-        <Ionicons name="information-circle-outline" size={18} color={colors.secondary} />
-        <Text style={styles.instructionText}>
-          Review the extracted items. Correct any errors before submitting.
-        </Text>
+      {/* Instruction / Status Banner */}
+      {isAlreadySubmitted ? (
+        <View style={[styles.instructionBar, { backgroundColor: invoice?.status === 'VERIFIED' ? '#E8F5E9' : '#EDE7F6' }]}>
+          <Ionicons
+            name={invoice?.status === 'VERIFIED' ? 'checkmark-circle' : 'time-outline'}
+            size={18}
+            color={invoice?.status === 'VERIFIED' ? '#2E7D32' : colors.primary}
+          />
+          <Text style={styles.instructionText}>
+            {invoice?.status === 'VERIFIED'
+              ? 'This receipt has been verified by the admin team.'
+              : invoice?.status === 'REJECTED'
+              ? `This receipt was rejected: ${invoice.rejectedReason || 'Does not match criteria'}`
+              : 'This receipt has been submitted and is currently under review.'}
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.instructionBar}>
+          <Ionicons name="information-circle-outline" size={18} color={colors.secondary} />
+          <Text style={styles.instructionText}>
+            Review the extracted store and items. Correct any errors before submitting.
+          </Text>
+        </View>
+      )}
+
+      {/* Editable Store / Shop Name Card */}
+      <View style={styles.storeCard}>
+        <View style={styles.storeHeader}>
+          <Ionicons name="storefront" size={18} color={colors.primary} />
+          <Text style={styles.storeLabel}>Store / Shop Name</Text>
+        </View>
+        <TextInput
+          style={styles.storeInput}
+          value={storeName}
+          onChangeText={setStoreName}
+          placeholder="Store name (e.g. Supul Collection, Cargills)"
+          placeholderTextColor="#999"
+          editable={!isAlreadySubmitted}
+        />
       </View>
 
       <FlatList
@@ -141,14 +245,15 @@ export default function InvoiceReviewScreen({ navigation, route }) {
         keyExtractor={(_, i) => String(i)}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={<Text style={styles.itemsTitle}>{items.length} Items Extracted</Text>}
         renderItem={({ item, index }) => (
           <View style={styles.itemCard}>
             <View style={styles.itemCardHeader}>
               <Text style={styles.itemIndex}>Item {index + 1}</Text>
-              <TouchableOpacity onPress={() => handleRemoveItem(index)}>
-                <Ionicons name="trash-outline" size={18} color={colors.error} />
-              </TouchableOpacity>
+              {!isAlreadySubmitted && (
+                <TouchableOpacity onPress={() => handleRemoveItem(index)}>
+                  <Ionicons name="trash-outline" size={18} color={colors.error} />
+                </TouchableOpacity>
+              )}
             </View>
             <View style={styles.itemField}>
               <Text style={styles.fieldLabel}>Product Name</Text>
@@ -157,6 +262,7 @@ export default function InvoiceReviewScreen({ navigation, route }) {
                 value={item.productName || ''}
                 onChangeText={(v) => handleUpdateItem(index, 'productName', v)}
                 placeholder="Product name"
+                editable={!isAlreadySubmitted}
               />
             </View>
             <View style={styles.itemFieldRow}>
@@ -173,6 +279,7 @@ export default function InvoiceReviewScreen({ navigation, route }) {
                   }}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
+                  editable={!isAlreadySubmitted}
                 />
               </View>
               <View style={[styles.itemField, { flex: 1, marginLeft: 8 }]}>
@@ -188,6 +295,7 @@ export default function InvoiceReviewScreen({ navigation, route }) {
                   }}
                   keyboardType="decimal-pad"
                   placeholder="1"
+                  editable={!isAlreadySubmitted}
                 />
               </View>
             </View>
@@ -202,35 +310,46 @@ export default function InvoiceReviewScreen({ navigation, route }) {
         )}
         ListHeaderComponent={
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={styles.itemsTitle}>{items.length} Items Extracted</Text>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
-              onPress={handleAddItem}
-            >
-              <Ionicons name="add" size={16} color="#fff" />
-              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Add Item</Text>
-            </TouchableOpacity>
+            <Text style={styles.itemsTitle}>{items.length} Items {isAlreadySubmitted ? '' : 'Extracted'}</Text>
+            {!isAlreadySubmitted && (
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                onPress={handleAddItem}
+              >
+                <Ionicons name="add" size={16} color="#fff" />
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Add Item</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
         ListFooterComponent={<View style={{ height: 100 }} />}
       />
 
       <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.cancelText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.confirmBtn, isConfirming && styles.confirmBtnDisabled]}
-          onPress={handleConfirm}
-          disabled={isConfirming}
-        >
-          {isConfirming ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Ionicons name="checkmark-circle" size={20} color="#fff" />
-          )}
-          <Text style={styles.confirmText}>Submit Receipt</Text>
-        </TouchableOpacity>
+        {isAlreadySubmitted ? (
+          <TouchableOpacity style={[styles.confirmBtn, { flex: 1 }]} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+            <Text style={styles.confirmText}>Back to Invoices</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity style={styles.cancelBtn} onPress={confirmDiscard}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.confirmBtn, isConfirming && styles.confirmBtnDisabled]}
+              onPress={handleConfirm}
+              disabled={isConfirming}
+            >
+              {isConfirming ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+              )}
+              <Text style={styles.confirmText}>Submit Receipt</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -251,6 +370,39 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF3E0', paddingHorizontal: 16, paddingVertical: 10,
   },
   instructionText: { ...typography.caption, color: colors.text, flex: 1 },
+  storeCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+    ...shadows.xs,
+  },
+  storeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  storeLabel: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  storeInput: {
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    backgroundColor: '#F9FBE7',
+  },
   listContent: { padding: 16 },
   itemsTitle: { ...typography.h4, color: colors.text, marginBottom: 12 },
   itemCard: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 12, ...shadows.sm },

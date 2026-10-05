@@ -91,7 +91,9 @@ export default function Dashboard() {
             {recentInvoices.map(inv => (
               <div key={inv.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                 <div>
-                  <p className="text-sm font-medium text-gray-800">{inv.storeName || 'Unknown Store'}</p>
+                  <p className="text-sm font-medium text-gray-800">
+                    {inv.storeName || inv.supermarket?.name || inv.parsedData?.storeName || 'Unknown Store'}
+                  </p>
                   <p className="text-xs text-gray-400">{inv.user?.name} · {new Date(inv.createdAt).toLocaleDateString()}</p>
                 </div>
                 <StatusBadge status={inv.status} />

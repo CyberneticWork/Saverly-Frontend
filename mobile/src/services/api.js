@@ -1,7 +1,35 @@
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import storage from './storage';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
+export const getApiBaseUrl = () => {
+  // 1. Web browser: Always use the browser's own host (localhost or current LAN IP), on port 5000
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.location) {
+      const hostname = window.location.hostname || 'localhost';
+      return `http://${hostname}:5000/api`;
+    }
+  }
+
+  // 2. Native Expo / Expo Go: dynamically extract Metro host IP so it survives Wi-Fi IP changes
+  try {
+    const hostUri = Constants?.expoConfig?.hostUri || Constants?.manifest2?.extra?.expoClient?.hostUri;
+    if (hostUri) {
+      const metroIp = hostUri.split(':')[0];
+      if (metroIp && metroIp !== 'localhost' && metroIp !== '127.0.0.1') {
+        return `http://${metroIp}:5000/api`;
+      }
+    }
+  } catch {
+    // fallback if Constants not accessible
+  }
+
+  // 3. Fallback to configured environment variable or current machine IP
+  return process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.4:5000/api';
+};
+
+const API_URL = getApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_URL,
@@ -12,9 +40,12 @@ const api = axios.create({
 // ── Request interceptor: attach access token ──────────────
 api.interceptors.request.use(async (config) => {
   try {
-    const token = await SecureStore.getItemAsync('accessToken');
+    const token = await storage.getItemAsync('accessToken');
     if (token) config.headers.Authorization = `Bearer ${token}`;
   } catch {}
+  if (config.data && (typeof FormData !== 'undefined' && config.data instanceof FormData)) {
+    delete config.headers['Content-Type'];
+  }
   return config;
 });
 
@@ -40,13 +71,13 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = await SecureStore.getItemAsync('refreshToken');
+        const refreshToken = await storage.getItemAsync('refreshToken');
         if (!refreshToken) throw new Error('No refresh token');
 
         const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
         const newToken = data.data.accessToken;
 
-        await SecureStore.setItemAsync('accessToken', newToken);
+        await storage.setItemAsync('accessToken', newToken);
         queue.forEach(p => p.resolve(newToken));
         queue = [];
 
@@ -55,8 +86,8 @@ api.interceptors.response.use(
       } catch {
         queue.forEach(p => p.reject(error));
         queue = [];
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
+        await storage.deleteItemAsync('accessToken');
+        await storage.deleteItemAsync('refreshToken');
         // Emit logout event
         throw error;
       } finally {
@@ -123,9 +154,8 @@ export const shoppingListsAPI = {
 
 // ── Invoices ──────────────────────────────────────────────
 export const invoicesAPI = {
-  // Legacy image upload (kept for reference)
+  // Server-side image upload & OCR
   scan: (formData) => api.post('/invoices/scan', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 120000,
   }),
   // Send OCR text extracted on-device (legacy path, kept for fallback)

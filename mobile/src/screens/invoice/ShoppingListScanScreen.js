@@ -52,11 +52,40 @@ export default function ShoppingListScanScreen({ navigation }) {
 
   // ── Image Capture ─────────────────────────────────────────────────────────
 
+  const takeWithNativeCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Camera access is needed to photograph your list.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        processImage(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.error('Shopping list native camera error:', err);
+      Alert.alert('Camera error', 'Failed to open camera.');
+    }
+  };
+
   const openCamera = async () => {
     if (!permission?.granted) {
       const { granted } = await requestPermission();
       if (!granted) {
-        Alert.alert('Camera access needed', 'Please allow camera access in Settings.');
+        Alert.alert(
+          'Camera access needed',
+          'Would you like to use the system camera or gallery instead?',
+          [
+            { text: 'System Camera', onPress: takeWithNativeCamera },
+            { text: 'Gallery', onPress: pickFromGallery },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
         return;
       }
     }
@@ -150,20 +179,31 @@ export default function ShoppingListScanScreen({ navigation }) {
   if (mode === 'camera') {
     return (
       <View style={styles.cameraContainer}>
-        <CameraView style={StyleSheet.absoluteFill} ref={cameraRef} facing="back">
-          <SafeAreaView style={styles.cameraUI} edges={['top', 'bottom']}>
+        <CameraView style={StyleSheet.absoluteFillObject} ref={cameraRef} facing="back" />
+        <SafeAreaView style={[StyleSheet.absoluteFillObject, styles.cameraUI]} edges={['top', 'bottom']} pointerEvents="box-none">
+          <View style={styles.cameraTopRow}>
             <TouchableOpacity style={styles.cameraBack} onPress={() => setMode('options')}>
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
+            <TouchableOpacity style={styles.cameraBack} onPress={takeWithNativeCamera}>
+              <Ionicons name="camera-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.cameraFrameWrapper} pointerEvents="none">
             <View style={styles.cameraFrame}>
-              <View style={styles.corner} />
+              <View style={styles.cornerTL} />
+              <View style={styles.cornerTR} />
+              <View style={styles.cornerBL} />
+              <View style={styles.cornerBR} />
             </View>
             <Text style={styles.cameraHint}>Position your shopping list within the frame</Text>
-            <TouchableOpacity style={styles.captureBtn} onPress={takePicture}>
+          </View>
+          <View style={styles.cameraBottomBar}>
+            <TouchableOpacity style={styles.captureBtn} onPress={takePicture} activeOpacity={0.8}>
               <View style={styles.captureInner} />
             </TouchableOpacity>
-          </SafeAreaView>
-        </CameraView>
+          </View>
+        </SafeAreaView>
       </View>
     );
   }
@@ -321,22 +361,39 @@ const styles = StyleSheet.create({
 
   // Camera
   cameraContainer: { flex: 1, backgroundColor: '#000' },
-  cameraUI: { flex: 1, justifyContent: 'space-between', alignItems: 'center', padding: 20 },
-  cameraBack: { alignSelf: 'flex-start', padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
+  cameraUI: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 100,
+    elevation: 100,
+  },
+  cameraTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingTop: 10 },
+  cameraBack: { padding: 10, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  cameraFrameWrapper: { alignItems: 'center', gap: 16, width: '100%' },
   cameraFrame: {
-    width: width - 60, height: 300, borderRadius: 16,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.6)',
-    justifyContent: 'center', alignItems: 'center',
+    width: width - 60, height: 320, borderRadius: 16,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    position: 'relative',
   },
-  corner: { width: 20, height: 20, borderTopWidth: 3, borderLeftWidth: 3, borderColor: '#fff', position: 'absolute', top: 10, left: 10 },
-  cameraHint: { color: 'rgba(255,255,255,0.85)', fontSize: 13, textAlign: 'center' },
+  cornerTL: { width: 24, height: 24, borderTopWidth: 3, borderLeftWidth: 3, borderColor: '#10B981', position: 'absolute', top: -2, left: -2, borderTopLeftRadius: 14 },
+  cornerTR: { width: 24, height: 24, borderTopWidth: 3, borderRightWidth: 3, borderColor: '#10B981', position: 'absolute', top: -2, right: -2, borderTopRightRadius: 14 },
+  cornerBL: { width: 24, height: 24, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: '#10B981', position: 'absolute', bottom: -2, left: -2, borderBottomLeftRadius: 14 },
+  cornerBR: { width: 24, height: 24, borderBottomWidth: 3, borderRightWidth: 3, borderColor: '#10B981', position: 'absolute', bottom: -2, right: -2, borderBottomRightRadius: 14 },
+  cameraHint: {
+    color: '#fff', fontSize: 13, fontWeight: '600',
+    backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: 20, overflow: 'hidden',
+  },
+  cameraBottomBar: { width: '100%', alignItems: 'center', paddingBottom: 24 },
   captureBtn: {
-    width: 70, height: 70, borderRadius: 35,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 3, borderColor: '#fff',
+    borderWidth: 4, borderColor: '#fff',
   },
-  captureInner: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#fff' },
+  captureInner: { width: 62, height: 62, borderRadius: 31, backgroundColor: colors.primary },
 
   // Processing
   processingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },

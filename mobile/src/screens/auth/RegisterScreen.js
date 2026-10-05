@@ -39,9 +39,13 @@ export default function RegisterScreen({ navigation }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', phone: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const { register } = useAuthStore();
 
-  const set = (key) => (val) => setForm(f => ({ ...f, [key]: val }));
+  const set = (key) => (val) => {
+    setForm(f => ({ ...f, [key]: val }));
+    if (errorMessage) setErrorMessage('');
+  };
 
   const validate = () => {
     if (!form.name.trim()) return 'Full name is required.';
@@ -55,14 +59,27 @@ export default function RegisterScreen({ navigation }) {
 
   const handleRegister = async () => {
     const error = validate();
-    if (error) { Alert.alert('Validation Error', error); return; }
+    if (error) {
+      setErrorMessage(error);
+      if (Platform.OS !== 'web') Alert.alert('Validation Error', error);
+      return;
+    }
 
     setIsLoading(true);
+    setErrorMessage('');
     try {
       await register({ name: form.name.trim(), email: form.email.trim().toLowerCase(), password: form.password, phone: form.phone || undefined });
     } catch (err) {
-      const msg = err.response?.data?.message || 'Registration failed. Please try again.';
-      Alert.alert('Registration Failed', msg);
+      let msg = err.response?.data?.message;
+      if (!msg) {
+        if (err.message === 'Network Error' || err.code === 'ERR_NETWORK') {
+          msg = 'Unable to connect to the backend server. Please verify the server is reachable.';
+        } else {
+          msg = err.message || 'Registration failed. Please try again.';
+        }
+      }
+      setErrorMessage(msg);
+      if (Platform.OS !== 'web') Alert.alert('Registration Failed', msg);
     } finally {
       setIsLoading(false);
     }
@@ -125,6 +142,14 @@ export default function RegisterScreen({ navigation }) {
                   </View>
                 ))}
               </View>
+
+              {/* Error Message Banner */}
+              {!!errorMessage && (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle-outline" size={18} color="#D32F2F" style={{ marginRight: 8 }} />
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              )}
 
               <TouchableOpacity
                 style={[styles.registerBtn, isLoading && { opacity: 0.7 }]}
@@ -191,6 +216,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8,
   },
   registerBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  errorText: {
+    color: '#D32F2F',
+    fontSize: 13,
+    flex: 1,
+    lineHeight: 18,
+  },
   loginRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 16 },
   loginText: { fontSize: 14, color: colors.textSecondary },
   loginLink: { fontSize: 14, fontWeight: '600', color: colors.primary },

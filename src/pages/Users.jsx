@@ -25,13 +25,15 @@ export default function Users() {
   });
 
   const users = data?.data || [];
-  const meta = data?.meta || {};
+  const meta = data?.meta || data?.pagination || {};
+  const totalCount = meta.total !== undefined ? meta.total : users.length;
+  const totalPages = meta.totalPages || meta.pages || 1;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Users</h1>
-        <p className="text-gray-500">{meta.total || 0} registered users</p>
+        <p className="text-gray-500">{totalCount} registered users</p>
       </div>
 
       <div className="relative mb-4">
@@ -110,11 +112,11 @@ export default function Users() {
         </table>
       </div>
 
-      {meta.totalPages > 1 && (
+      {totalPages > 1 && (
         <div className="flex justify-center gap-2 mt-4">
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="px-4 py-2 border rounded-xl disabled:opacity-40 hover:bg-gray-50">Prev</button>
-          <span className="px-4 py-2 text-gray-600">Page {page} of {meta.totalPages}</span>
-          <button disabled={page >= meta.totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 border rounded-xl disabled:opacity-40 hover:bg-gray-50">Next</button>
+          <span className="px-4 py-2 text-gray-600">Page {page} of {totalPages}</span>
+          <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 border rounded-xl disabled:opacity-40 hover:bg-gray-50">Next</button>
         </div>
       )}
     </div>

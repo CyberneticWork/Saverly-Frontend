@@ -16,6 +16,7 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const { login } = useAuthStore();
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -32,17 +33,31 @@ export default function LoginScreen({ navigation }) {
   const handleLogin = async () => {
     if (!email.trim() || !password) {
       shake();
-      Alert.alert('Missing Fields', 'Please enter your email and password.');
+      setErrorMessage('Please enter both email and password.');
+      if (Platform.OS !== 'web') {
+        Alert.alert('Missing Fields', 'Please enter your email and password.');
+      }
       return;
     }
 
     setIsLoading(true);
+    setErrorMessage('');
     try {
       await login(email.trim().toLowerCase(), password);
     } catch (err) {
       shake();
-      const msg = err.response?.data?.message || 'Login failed. Please try again.';
-      Alert.alert('Login Failed', msg);
+      let msg = err.response?.data?.message;
+      if (!msg) {
+        if (err.message === 'Network Error' || err.code === 'ERR_NETWORK') {
+          msg = 'Unable to connect to the backend server. Please verify the server is reachable.';
+        } else {
+          msg = err.message || 'Login failed. Please try again.';
+        }
+      }
+      setErrorMessage(msg);
+      if (Platform.OS !== 'web') {
+        Alert.alert('Login Failed', msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -79,7 +94,7 @@ export default function LoginScreen({ navigation }) {
                     placeholder="you@example.com"
                     placeholderTextColor={colors.textLight}
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={(val) => { setEmail(val); if (errorMessage) setErrorMessage(''); }}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -98,7 +113,7 @@ export default function LoginScreen({ navigation }) {
                     placeholder="Your password"
                     placeholderTextColor={colors.textLight}
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(val) => { setPassword(val); if (errorMessage) setErrorMessage(''); }}
                     secureTextEntry={!showPassword}
                     returnKeyType="done"
                     onSubmitEditing={handleLogin}
@@ -111,6 +126,14 @@ export default function LoginScreen({ navigation }) {
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Error Message Banner */}
+              {!!errorMessage && (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle-outline" size={18} color="#D32F2F" style={{ marginRight: 8 }} />
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              )}
 
               {/* Login Button */}
               <TouchableOpacity
@@ -203,5 +226,23 @@ const styles = StyleSheet.create({
     paddingVertical: 14, alignItems: 'center',
   },
   registerBtnText: { ...typography.button, color: colors.primary },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  errorText: {
+    color: '#D32F2F',
+    fontSize: 13,
+    flex: 1,
+    lineHeight: 18,
+  },
   footer: { textAlign: 'center', color: 'rgba(255,255,255,0.74)', marginTop: 24, fontSize: 14 },
 });
