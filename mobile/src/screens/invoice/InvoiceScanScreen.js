@@ -173,7 +173,7 @@ export default function InvoiceScanScreen({ navigation }) {
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaType?.Images || ['images'],
         allowsEditing: false, // Capture full uncropped receipt
         quality: 0.9,
       });
@@ -211,7 +211,7 @@ export default function InvoiceScanScreen({ navigation }) {
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaType?.Images || ['images'],
       allowsEditing: false, // Keep full receipt image
       quality: 0.9,
     });
@@ -281,15 +281,30 @@ export default function InvoiceScanScreen({ navigation }) {
 
       // 2. Fallback to Server-Side OCR (Tesseract / Server pipeline)
       if (!invoiceId) {
+        setUploadStatus('Processing image…');
+        let uploadUri = selectedImage;
+        try {
+          const manipulated = await ImageManipulator.manipulateAsync(
+            selectedImage,
+            [{ resize: { width: 1600 } }],
+            { compress: 0.88, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          if (manipulated?.uri) {
+            uploadUri = manipulated.uri;
+          }
+        } catch (manipErr) {
+          console.warn('ImageManipulator JPEG conversion error:', manipErr);
+        }
+
         setUploadStatus('Uploading to server OCR…');
         const formData = new FormData();
         if (Platform.OS === 'web') {
-          const resp = await fetch(selectedImage);
+          const resp = await fetch(uploadUri);
           const blob = await resp.blob();
           formData.append('invoice', blob, 'receipt.jpg');
         } else {
           formData.append('invoice', {
-            uri: selectedImage,
+            uri: uploadUri,
             name: 'receipt.jpg',
             type: 'image/jpeg',
           });
