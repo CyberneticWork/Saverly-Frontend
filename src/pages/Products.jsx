@@ -11,7 +11,7 @@ export default function Products() {
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', brand: '', description: '', defaultUnit: 'unit', categoryId: '' });
+  const [form, setForm] = useState({ name: '', brand: '', description: '', defaultUnit: 'unit', categoryId: '', barcode: '' });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -42,18 +42,33 @@ export default function Products() {
 
   const openEdit = (product) => {
     setEditing(product);
-    setForm({ name: product.name, brand: product.brand || '', description: product.description || '', defaultUnit: product.defaultUnit, categoryId: product.categoryId || '' });
+    setForm({
+      name: product.name || '',
+      brand: product.brand || '',
+      description: product.description || '',
+      defaultUnit: product.defaultUnit || 'unit',
+      categoryId: product.categoryId || product.category?.id || '',
+      barcode: product.barcode || '',
+    });
     setShowModal(true);
   };
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', brand: '', description: '', defaultUnit: 'unit', categoryId: '' });
+    setForm({ name: '', brand: '', description: '', defaultUnit: 'unit', categoryId: '', barcode: '' });
     setShowModal(true);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!form.name.trim()) {
+      toast.error('Product name is required');
+      return;
+    }
+    if (!form.categoryId) {
+      toast.error('Please select a category');
+      return;
+    }
     saveMut.mutate(form);
   };
 
@@ -157,11 +172,13 @@ export default function Products() {
               <FormField label="Brand" value={form.brand} onChange={v => setForm(f => ({ ...f, brand: v }))} />
               <FormField label="Description" value={form.description} onChange={v => setForm(f => ({ ...f, description: v }))} />
               <FormField label="Default Unit" value={form.defaultUnit} onChange={v => setForm(f => ({ ...f, defaultUnit: v }))} placeholder="kg, L, unit..." />
+              <FormField label="Barcode" value={form.barcode} onChange={v => setForm(f => ({ ...f, barcode: v }))} placeholder="Optional barcode" />
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                 <select
                   value={form.categoryId}
                   onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
+                  required
                   className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">Select category</option>

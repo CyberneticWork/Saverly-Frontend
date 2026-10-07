@@ -82,17 +82,19 @@ export default function InvoiceReviewScreen({ navigation, route }) {
         throw new Error('Unexpected invoice response from server.');
       }
 
-      // If still processing, poll every 3s (up to 30s)
-      if (data.status === 'PROCESSING' && attempt < 10) {
-        setIsProcessing(true);
-        setIsLoading(false);
-        pollRef.current = setTimeout(() => loadInvoice(attempt + 1), 3000);
-        return;
+      // If still processing, poll every 2.5s (up to 30 attempts = 75s)
+      if (data.status === 'PROCESSING') {
+        if (attempt < 30) {
+          setIsProcessing(true);
+          setIsLoading(false);
+          pollRef.current = setTimeout(() => loadInvoice(attempt + 1), 2500);
+          return;
+        }
       }
       setIsProcessing(false);
       setInvoice(data);
       setStoreName(data.storeName || data.supermarket?.name || data.parsedData?.storeName || '');
-      setItems(data.items || []);
+      setItems(data.items && data.items.length > 0 ? data.items : (data.parsedData?.items || []));
     } catch (err) {
       Alert.alert('Error', err?.response?.data?.message || err?.message || 'Could not load invoice.');
       navigation.goBack();
@@ -304,8 +306,20 @@ export default function InvoiceReviewScreen({ navigation, route }) {
         ListEmptyComponent={() => (
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>😕</Text>
-            <Text style={styles.emptyTitle}>No items detected</Text>
-            <Text style={styles.emptyText}>OCR could not read the receipt. Add items manually below.</Text>
+            <Text style={styles.emptyTitle}>
+              {invoice?.status === 'PROCESSING' ? 'Processing in progress' : 'No items detected'}
+            </Text>
+            <Text style={styles.emptyText}>
+              {invoice?.status === 'PROCESSING'
+                ? 'Server is still analyzing the receipt image.'
+                : 'OCR could not read the receipt. Add items manually below.'}
+            </Text>
+            <TouchableOpacity
+              style={{ marginTop: 14, backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
+              onPress={() => { setIsLoading(true); loadInvoice(0); }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Check Again / Refresh</Text>
+            </TouchableOpacity>
           </View>
         )}
         ListHeaderComponent={
