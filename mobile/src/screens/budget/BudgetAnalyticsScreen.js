@@ -224,6 +224,7 @@ export default function BudgetAnalyticsScreen({ navigation }) {
       <SetBudgetModal
         visible={showEditBudgetModal}
         currentBudget={budgetData}
+        initialPeriod={activePeriod}
         onBudgetSaved={(updated) => {
           setBudgetData(updated);
           setShowEditBudgetModal(false);

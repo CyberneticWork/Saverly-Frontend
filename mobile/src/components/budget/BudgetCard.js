@@ -14,11 +14,18 @@ export default function BudgetCard({ budgetData, onOpenSetBudget, activePeriod, 
 
   const isMonthly = period === 'MONTHLY';
   const metrics = isMonthly ? budgetData?.monthly : budgetData?.weekly;
-  const limit = metrics?.limit ?? null;
-  const spent = metrics?.spent ?? 0;
-  const remaining = metrics?.remaining ?? (limit !== null ? limit - spent : null);
-  const percentage = metrics?.percentage ?? (limit && limit > 0 ? Math.round((spent / limit) * 100) : 0);
-  const status = metrics?.status ?? 'unset';
+  const rawLimit = metrics?.limit ?? (isMonthly
+    ? (budgetData?.budget?.monthlyLimit ?? (budgetData?.preferredPeriod === 'MONTHLY' ? budgetData?.limit : null))
+    : (budgetData?.budget?.weeklyLimit ?? (budgetData?.preferredPeriod === 'WEEKLY' ? budgetData?.limit : null)));
+  const limit = rawLimit !== null && rawLimit !== undefined && !isNaN(Number(rawLimit)) ? Number(rawLimit) : null;
+  const spent = Number(metrics?.spent ?? (budgetData?.spent ?? 0)) || 0;
+  const remaining = metrics?.remaining !== null && metrics?.remaining !== undefined
+    ? Number(metrics.remaining)
+    : (limit !== null ? limit - spent : null);
+  const percentage = metrics?.percentage !== null && metrics?.percentage !== undefined
+    ? Number(metrics.percentage)
+    : (limit && limit > 0 ? Math.round((spent / limit) * 100) : 0);
+  const status = metrics?.status ?? (limit && limit > 0 ? (spent > limit ? 'exceeded' : (percentage >= 80 ? 'warning' : 'on_track')) : 'unset');
   const receiptCount = metrics?.receiptCount ?? 0;
 
   const hasBudget = limit !== null && limit > 0;

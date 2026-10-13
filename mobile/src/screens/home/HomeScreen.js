@@ -192,11 +192,15 @@ export default function HomeScreen({ navigation, route }) {
     setRefreshing(false);
   };
 
-  const handleBudgetSaved = (updatedBudget) => {
-    setBudgetData(updatedBudget);
-    if (updatedBudget?.preferredPeriod) {
-      setActivePeriod(updatedBudget.preferredPeriod);
+  const handleBudgetSaved = async (updatedBudget) => {
+    if (updatedBudget) {
+      setBudgetData(updatedBudget);
+      if (updatedBudget?.preferredPeriod) {
+        setActivePeriod(updatedBudget.preferredPeriod);
+      }
     }
+    // Re-fetch data so budget overview, spent metrics, and progress immediately refresh
+    await loadData();
   };
 
   const handleItemAdded = () => {
@@ -690,6 +694,7 @@ export default function HomeScreen({ navigation, route }) {
       <SetBudgetModal
         visible={showBudgetModal}
         currentBudget={budgetData}
+        initialPeriod={activePeriod}
         onBudgetSaved={handleBudgetSaved}
         onClose={() => setShowBudgetModal(false)}
       />

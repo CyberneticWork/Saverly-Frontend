@@ -10,60 +10,102 @@ import { budgetAPI } from '../../services/api';
 const WEEKLY_PRESETS = [5000, 10000, 15000, 25000, 40000];
 const MONTHLY_PRESETS = [25000, 50000, 75000, 100000, 150000];
 
-export default function SetBudgetModal({ visible, onClose, onBudgetSaved, currentBudget }) {
-  const [period, setPeriod] = useState('MONTHLY');
+export default function SetBudgetModal({ visible, onClose, onBudgetSaved, currentBudget, initialPeriod }) {
+  const [period, setPeriod] = useState(initialPeriod || 'MONTHLY');
   const [amount, setAmount] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const parseAmount = (val) => {
+    if (!val) return 0;
+    const cleaned = String(val).replace(/[^0-9.]/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : num;
+  };
 
   const isUpdating = Boolean(
     currentBudget?.monthly?.limit ||
     currentBudget?.weekly?.limit ||
+    currentBudget?.budget?.monthlyLimit ||
+    currentBudget?.budget?.weeklyLimit ||
     currentBudget?.limit
   );
 
   useEffect(() => {
-    if (visible && currentBudget) {
-      const pref = currentBudget.preferredPeriod || currentBudget.period || 'MONTHLY';
+    if (visible) {
+      setErrorMessage('');
+      const pref = initialPeriod || currentBudget?.preferredPeriod || currentBudget?.period || 'MONTHLY';
       setPeriod(pref);
-      if (pref === 'MONTHLY' && currentBudget.monthly?.limit) {
-        setAmount(String(currentBudget.monthly.limit));
-      } else if (pref === 'WEEKLY' && currentBudget.weekly?.limit) {
-        setAmount(String(currentBudget.weekly.limit));
-      } else if (currentBudget.limit) {
-        setAmount(String(currentBudget.limit));
-      } else {
-        setAmount('');
-      }
-    } else if (visible) {
-      setPeriod('MONTHLY');
-      setAmount('');
-    }
-  }, [visible, currentBudget]);
 
-  const numAmount = parseFloat(amount) || 0;
+      let initialVal = '';
+      if (pref === 'MONTHLY' && (currentBudget?.monthly?.limit || currentBudget?.budget?.monthlyLimit)) {
+        initialVal = String(currentBudget.monthly?.limit || currentBudget.budget?.monthlyLimit);
+      } else if (pref === 'WEEKLY' && (currentBudget?.weekly?.limit || currentBudget?.budget?.weeklyLimit)) {
+        initialVal = String(currentBudget.weekly?.limit || currentBudget.budget?.weeklyLimit);
+      } else if (currentBudget?.limit) {
+        initialVal = String(currentBudget.limit);
+      } else {
+        // Sensible default prefill so the user is never confused by an empty input with a placeholder
+        initialVal = pref === 'MONTHLY' ? '50000' : '15000';
+      }
+      setAmount(initialVal);
+    }
+  }, [visible, currentBudget, initialPeriod]);
+
+  const numAmount = parseAmount(amount);
   const presets = period === 'WEEKLY' ? WEEKLY_PRESETS : MONTHLY_PRESETS;
 
+  const handlePeriodToggle = (newPeriod) => {
+    if (newPeriod === period) return;
+    setPeriod(newPeriod);
+    setErrorMessage('');
+    const currentNum = parseAmount(amount);
+    if (currentNum > 0) {
+      if (newPeriod === 'WEEKLY' && period === 'MONTHLY') {
+        setAmount(String(Math.round(currentNum / 4)));
+      } else if (newPeriod === 'MONTHLY' && period === 'WEEKLY') {
+        setAmount(String(Math.round(currentNum * 4)));
+      }
+    } else {
+      setAmount(newPeriod === 'MONTHLY' ? '50000' : '15000');
+    }
+  };
+
   const handleSave = async () => {
-    if (!numAmount || numAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid budget amount in Rs.');
+    const validAmount = parseAmount(amount);
+    if (!validAmount || validAmount <= 0) {
+      const msg = 'Please enter a valid budget amount in Rs.';
+      setErrorMessage(msg);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
+        window.alert(msg);
+      } else {
+        Alert.alert('Invalid Amount', msg);
+      }
       return;
     }
 
+    setErrorMessage('');
     setIsSaving(true);
     try {
       const payload = {
         period,
-        amount: numAmount,
+        amount: validAmount,
         currency: 'LKR',
       };
       const res = await budgetAPI.setBudget(payload);
+      const savedData = res?.data?.data || res?.data;
       if (onBudgetSaved) {
-        onBudgetSaved(res.data.data);
+        onBudgetSaved(savedData);
       }
       onClose();
     } catch (err) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to save budget.';
-      Alert.alert('Error', msg);
+      setErrorMessage(msg);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.alert) {
+        window.alert(msg);
+      } else {
+        Alert.alert('Error', msg);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -105,7 +147,7 @@ export default function SetBudgetModal({ visible, onClose, onBudgetSaved, curren
             <View style={styles.periodContainer}>
               <TouchableOpacity
                 style={[styles.periodBtn, period === 'MONTHLY' && styles.periodBtnActive]}
-                onPress={() => setPeriod('MONTHLY')}
+                onPress={() => handlePeriodToggle('MONTHLY')}
               >
                 <Ionicons
                   name="calendar"
@@ -118,7 +160,7 @@ export default function SetBudgetModal({ visible, onClose, onBudgetSaved, curren
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.periodBtn, period === 'WEEKLY' && styles.periodBtnActive]}
-                onPress={() => setPeriod('WEEKLY')}
+                onPress={() => handlePeriodToggle('WEEKLY')}
               >
                 <Ionicons
                   name="calendar-outline"
@@ -144,7 +186,10 @@ export default function SetBudgetModal({ visible, onClose, onBudgetSaved, curren
                   placeholder={period === 'MONTHLY' ? '50,000' : '15,000'}
                   placeholderTextColor={colors.textLight}
                   value={amount}
-                  onChangeText={setAmount}
+                  onChangeText={(val) => {
+                    setAmount(val);
+                    if (errorMessage) setErrorMessage('');
+                  }}
                   autoFocus
                 />
               </View>
@@ -158,7 +203,10 @@ export default function SetBudgetModal({ visible, onClose, onBudgetSaved, curren
                   <TouchableOpacity
                     key={preset}
                     style={[styles.presetChip, numAmount === preset && styles.presetChipActive]}
-                    onPress={() => setAmount(String(preset))}
+                    onPress={() => {
+                      setAmount(String(preset));
+                      if (errorMessage) setErrorMessage('');
+                    }}
                   >
                     <Text
                       style={[styles.presetText, numAmount === preset && styles.presetTextActive]}
@@ -181,6 +229,14 @@ export default function SetBudgetModal({ visible, onClose, onBudgetSaved, curren
                 </Text>
               </View>
             )}
+
+            {/* Error Message Display */}
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.errorBannerText}>{errorMessage}</Text>
+              </View>
+            ) : null}
 
             {/* Actions */}
             <View style={styles.btnRow}>
@@ -405,5 +461,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#fff',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#DC2626',
+    fontWeight: '500',
   },
 });
