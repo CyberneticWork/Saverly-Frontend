@@ -16,13 +16,13 @@ export default function ProductCard({ product, onPress, horizontal = false }) {
         </View>
         <View style={styles.horizontalInfo}>
           <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
-          {product.brand && <Text style={styles.brand} numberOfLines={1}>{product.brand}</Text>}
+          {Boolean(product.brand) ? <Text style={styles.brand} numberOfLines={1}>{product.brand}</Text> : null}
           <Text style={styles.unit}>{product.defaultUnit}</Text>
-          {product.cheapestPrice != null && (
+          {product.cheapestPrice != null ? (
             <Text style={styles.price}>
-              LKR {Number(product.cheapestPrice).toLocaleString('en-LK', { minimumFractionDigits: 2 })}
+              {`LKR ${Number(product.cheapestPrice).toLocaleString('en-LK', { minimumFractionDigits: 2 })}`}
             </Text>
-          )}
+          ) : null}
         </View>
       </TouchableOpacity>
     );
@@ -37,30 +37,32 @@ export default function ProductCard({ product, onPress, horizontal = false }) {
         ) : (
           <Text style={styles.emoji}>🛒</Text>
         )}
-        {product.isOnSale && (
+        {Boolean(product.isOnSale) ? (
           <View style={styles.saleBadge}>
             <Text style={styles.saleText}>SALE</Text>
           </View>
-        )}
+        ) : null}
       </View>
 
       {/* Info */}
       <View style={styles.info}>
         <Text style={styles.category} numberOfLines={1}>{product.category?.name || ''}</Text>
         <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
-        {product.brand && <Text style={styles.brand} numberOfLines={1}>{product.brand}</Text>}
+        {Boolean(product.brand) ? <Text style={styles.brand} numberOfLines={1}>{product.brand}</Text> : null}
         <View style={styles.footer}>
           {product.cheapestPrice != null ? (
-            <Text style={styles.price}>LKR {Number(product.cheapestPrice).toLocaleString('en-LK', { minimumFractionDigits: 2 })}</Text>
+            <Text style={styles.price}>
+              {`LKR ${Number(product.cheapestPrice).toLocaleString('en-LK', { minimumFractionDigits: 2 })}`}
+            </Text>
           ) : (
             <Text style={styles.noPriceText}>No prices yet</Text>
           )}
-          {product._count?.favourites > 0 && (
+          {product._count?.favourites > 0 ? (
             <View style={styles.favBadge}>
               <Ionicons name="heart" size={10} color={colors.sale} />
               <Text style={styles.favCount}>{product._count.favourites}</Text>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
     </TouchableOpacity>

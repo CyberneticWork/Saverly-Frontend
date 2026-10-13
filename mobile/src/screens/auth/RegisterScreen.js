@@ -26,11 +26,11 @@ const Field = ({ label, placeholder, value, onChange, keyboardType = 'default', 
         secureTextEntry={secure}
         returnKeyType={returnKeyType}
       />
-      {rightIcon && (
+      {Boolean(rightIcon) ? (
         <TouchableOpacity style={styles.eyeBtn} onPress={onRightIcon}>
           <Ionicons name={rightIcon} size={20} color={colors.textLight} />
         </TouchableOpacity>
-      )}
+      ) : null}
     </View>
   </View>
 );
@@ -159,10 +159,10 @@ export default function RegisterScreen({ navigation }) {
                 {isLoading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <>
-                    <Ionicons name="person-add-outline" size={20} color="#fff" />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="person-add-outline" size={20} color="#fff" style={{ marginRight: 6 }} />
                     <Text style={styles.registerBtnText}>Create Account</Text>
-                  </>
+                  </View>
                 )}
               </TouchableOpacity>
 

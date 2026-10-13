@@ -3,6 +3,11 @@ import axios from 'axios';
 const getBaseUrl = () => {
   let url = (import.meta.env.VITE_API_URL || '').trim();
 
+  // In local development, if VITE_API_URL is unset, default to local backend
+  if (import.meta.env.DEV && !url) {
+    return 'http://localhost:5000/api';
+  }
+
   // If running in browser on a live/remote domain, never attempt to call localhost
   if (
     typeof window !== 'undefined' &&

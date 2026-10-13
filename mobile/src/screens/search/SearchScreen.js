@@ -181,8 +181,24 @@ export default function SearchScreen({ navigation, route }) {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Gradient Header */}
       <LinearGradient colors={[colors.primary, colors.primaryMedium]} style={styles.header}>
-        <Text style={styles.headerTitle}>Smart Shopping</Text>
-        <Text style={styles.headerSub}>Find the best prices</Text>
+        <View style={styles.headerTopRow}>
+          {Boolean(navigation.canGoBack()) ? (
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          ) : null}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Smart Shopping</Text>
+            <Text style={styles.headerSub}>Find the best prices</Text>
+          </View>
+        </View>
 
         {/* Search Row */}
         <View style={styles.searchRow}>
@@ -319,12 +335,26 @@ export default function SearchScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  safe: { flex: 1, backgroundColor: colors.primary },
   header: {
     paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16,
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 12,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
-  headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginBottom: 12 },
+  headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.75)' },
   searchRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   searchBar: {
     flex: 1, flexDirection: 'row', alignItems: 'center',

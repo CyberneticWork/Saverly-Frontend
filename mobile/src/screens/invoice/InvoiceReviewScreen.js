@@ -155,9 +155,12 @@ export default function InvoiceReviewScreen({ navigation, route }) {
       await invoicesAPI.confirm(invoiceId, { storeName: storeName.trim(), items: payload });
       isSubmittedRef.current = true;
       Alert.alert(
-        'Submitted!',
-        'Your receipt has been submitted. Our team will verify the prices and update the database.',
-        [{ text: 'OK', onPress: () => navigation.navigate('InvoiceList') }]
+        'Saved to Community Prices!',
+        'All items and prices from this receipt are now stored in the community price data and ready for price comparison!',
+        [
+          { text: 'View Community Prices', onPress: () => navigation.navigate('Home', { screen: 'HomeMain' }) },
+          { text: 'View Invoices', onPress: () => navigation.navigate('InvoiceList') },
+        ]
       );
     } catch {
       Alert.alert('Error', 'Could not submit receipt.');
@@ -187,18 +190,18 @@ export default function InvoiceReviewScreen({ navigation, route }) {
             {storeName || invoice?.supermarket?.name || 'Store detected'}
           </Text>
         </View>
-        {invoice?.purchaseDate && (
+        {Boolean(invoice?.purchaseDate) ? (
           <View style={styles.infoItem}>
             <Ionicons name="calendar-outline" size={16} color={colors.primary} />
             <Text style={styles.infoText}>{new Date(invoice.purchaseDate).toLocaleDateString()}</Text>
           </View>
-        )}
-        {invoice?.total && (
+        ) : null}
+        {invoice?.total != null ? (
           <View style={styles.infoItem}>
             <Ionicons name="cash-outline" size={16} color={colors.primary} />
-            <Text style={styles.infoText}>Total: LKR {invoice.total.toFixed(2)}</Text>
+            <Text style={styles.infoText}>{`Total: LKR ${Number(invoice.total).toFixed(2)}`}</Text>
           </View>
-        )}
+        ) : null}
       </View>
 
       {/* Instruction / Status Banner */}
@@ -301,6 +304,16 @@ export default function InvoiceReviewScreen({ navigation, route }) {
                 />
               </View>
             </View>
+            {Boolean(item.productName) && (
+              <TouchableOpacity
+                style={styles.itemCompareBtn}
+                onPress={() => navigation.navigate('PriceCompare', { productId: item.productId, productName: item.productName })}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="stats-chart-outline" size={13} color={colors.primary} />
+                <Text style={styles.itemCompareBtnText}>Compare Price Across Supermarkets</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
         ListEmptyComponent={() => (
@@ -346,7 +359,7 @@ export default function InvoiceReviewScreen({ navigation, route }) {
             <Text style={styles.confirmText}>Back to Invoices</Text>
           </TouchableOpacity>
         ) : (
-          <>
+          <View style={{ flex: 1, flexDirection: 'row', gap: 12 }}>
             <TouchableOpacity style={styles.cancelBtn} onPress={confirmDiscard}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
@@ -362,7 +375,7 @@ export default function InvoiceReviewScreen({ navigation, route }) {
               )}
               <Text style={styles.confirmText}>Submit Receipt</Text>
             </TouchableOpacity>
-          </>
+          </View>
         )}
       </View>
     </SafeAreaView>
@@ -443,4 +456,18 @@ const styles = StyleSheet.create({
   confirmBtn: { flex: 2, backgroundColor: colors.primary, borderRadius: 12, padding: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
   confirmBtnDisabled: { opacity: 0.5 },
   confirmText: { ...typography.button, color: '#fff' },
+  itemCompareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  itemCompareBtnText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
+  },
 });

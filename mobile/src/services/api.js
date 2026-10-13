@@ -118,6 +118,16 @@ export const productsAPI = {
   getCheapest: (id) => api.get(`/products/${id}/cheapest`),
   toggleFavourite: (id) => api.post(`/products/${id}/favourite`),
   getFavourites: () => api.get('/products/me/favourites'),
+  communityAdd: (data) => api.post('/products/community-add', data),
+  getCommunityData: (params) => api.get('/products/community-data', { params }),
+  getCompanyPrices: (params) => api.get('/products/company-prices', { params }),
+};
+
+// ── Budget ────────────────────────────────────────────────
+export const budgetAPI = {
+  getCurrent: (params) => api.get('/budget/current', { params }),
+  setBudget: (data) => api.post('/budget', data),
+  getHistory: () => api.get('/budget/history'),
 };
 
 // ── Categories ────────────────────────────────────────────
@@ -135,7 +145,23 @@ export const supermarketsAPI = {
 
 // ── Prices ────────────────────────────────────────────────
 export const pricesAPI = {
-  compare: (productIds) => api.get('/prices/compare', { params: { productIds: productIds.join(',') } }),
+  compare: (arg) => {
+    if (typeof arg === 'string') {
+      return api.get('/prices/compare', { params: { productId: arg } });
+    }
+    if (Array.isArray(arg)) {
+      return api.get('/prices/compare', { params: { productIds: arg.join(',') } });
+    }
+    if (typeof arg === 'object' && arg !== null) {
+      const params = {};
+      if (arg.productId) params.productId = arg.productId;
+      if (arg.productIds) params.productIds = Array.isArray(arg.productIds) ? arg.productIds.join(',') : arg.productIds;
+      if (arg.productName) params.productName = arg.productName;
+      if (arg.q) params.q = arg.q;
+      return api.get('/prices/compare', { params });
+    }
+    return api.get('/prices/compare');
+  },
 };
 
 // ── Shopping Lists ────────────────────────────────────────
@@ -152,7 +178,7 @@ export const shoppingListsAPI = {
   optimize: (id) => api.get(`/shopping-lists/${id}/optimize`),
 };
 
-// ── Invoices ──────────────────────────────────────────────
+// ── Invoices (Scanned Receipts & OCR Bills) ───────────────
 export const invoicesAPI = {
   // Server-side image upload & OCR
   scan: (formData) => api.post('/invoices/scan', formData, {
@@ -162,7 +188,9 @@ export const invoicesAPI = {
   scanText: (data) => api.post('/invoices/scan-text', data, { timeout: 60000 }),
   // New: send pre-parsed structured JSON from on-device Gemini — server just saves, no AI needed
   scanStructured: (data) => api.post('/invoices/scan-structured', data, { timeout: 30000 }),
-  list: (params) => api.get('/invoices', { params }),
+  list: (params) => api.get('/invoices', { params: { type: 'scanned', ...params } }),
+  getRecentExpenses: (params) => api.get('/invoices/recent-expenses', { params }),
+  addManualExpense: (data) => api.post('/invoices/manual-expense', data),
   getById: (id) => api.get(`/invoices/${id}`),
   confirm: (id, data) => api.put(`/invoices/${id}/confirm`, data),
   remove: (id) => api.delete(`/invoices/${id}`),
@@ -174,6 +202,13 @@ export const invoicesAPI = {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 60000,
   }),
+};
+
+// ── Expenses (Manual Grocery Spending) ─────────────────────
+export const expensesAPI = {
+  list: (params) => api.get('/invoices/expenses', { params }),
+  add: (data) => api.post('/invoices/manual-expense', data),
+  remove: (id) => api.delete(`/invoices/expenses/${id}`),
 };
 
 // ── Users ─────────────────────────────────────────────────
