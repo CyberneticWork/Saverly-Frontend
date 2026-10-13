@@ -4,15 +4,18 @@ import axios from 'axios';
 import storage from './storage';
 
 export const getApiBaseUrl = () => {
-  // 1. Web browser: Always use the browser's own host (localhost or current LAN IP), on port 5000
+  // 1. Web browser: Use relative /api so Metro development server reverse-proxies to live backend without CORS errors
   if (Platform.OS === 'web') {
-    if (typeof window !== 'undefined' && window.location) {
-      const hostname = window.location.hostname || 'localhost';
-      return `http://${hostname}:5000/api`;
-    }
+    return '/api';
   }
 
-  // 2. Native Expo / Expo Go: dynamically extract Metro host IP so it survives Wi-Fi IP changes
+  // 2. Native Expo Go: Explicitly configured environment variable takes top priority
+  const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (envUrl && envUrl !== 'auto' && envUrl !== 'local') {
+    return envUrl.endsWith('/api') ? envUrl : `${envUrl.replace(/\/+$/, '')}/api`;
+  }
+
+  // 3. Native Expo Go: dynamically extract Metro host IP for local development if no live URL configured
   try {
     const hostUri = Constants?.expoConfig?.hostUri || Constants?.manifest2?.extra?.expoClient?.hostUri;
     if (hostUri) {
@@ -25,11 +28,12 @@ export const getApiBaseUrl = () => {
     // fallback if Constants not accessible
   }
 
-  // 3. Fallback to configured environment variable or current machine IP
-  return process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.4:5000/api';
+  // 4. Fallback to app.json extra or live API
+  return Constants?.expoConfig?.extra?.apiUrl || 'https://apisaverly.cyberneticde.site/api';
 };
 
 const API_URL = getApiBaseUrl();
+console.log('[Saverly Mobile] Connected to API URL:', API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
