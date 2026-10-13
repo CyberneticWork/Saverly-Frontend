@@ -97,14 +97,14 @@ export default function ProductDetailScreen({ navigation, route }) {
               <Text style={styles.categoryText}>{product.category?.name}</Text>
             </View>
             <Text style={styles.productName}>{product.name}</Text>
-            {product.brand && <Text style={styles.brandText}>by {product.brand}</Text>}
-            {product.description && (
+            {Boolean(product.brand) ? <Text style={styles.brandText}>{`by ${product.brand}`}</Text> : null}
+            {Boolean(product.description) ? (
               <Text style={styles.descriptionText}>{product.description}</Text>
-            )}
+            ) : null}
           </View>
 
           {/* Price summary */}
-          {cheapestPrice && (
+          {Boolean(cheapestPrice) ? (
             <View style={styles.priceSummary}>
               <View style={styles.priceLeft}>
                 <Text style={styles.fromLabel}>Best price from</Text>
@@ -114,15 +114,15 @@ export default function ProductDetailScreen({ navigation, route }) {
                   <Text style={styles.unitText}> / {product.defaultUnit}</Text>
                 </Text>
               </View>
-              {savings > 0 && (
+              {savings > 0 ? (
                 <View style={styles.savingsBadge}>
                   <Text style={styles.savingsLabel}>Save up to</Text>
                   <Text style={styles.savingsAmount}>LKR {savings}</Text>
                   <Text style={styles.savingsVs}>vs highest</Text>
                 </View>
-              )}
+              ) : null}
             </View>
-          )}
+          ) : null}
 
           {/* Compare button */}
           <TouchableOpacity style={styles.compareBtn} onPress={handleCompare}>
@@ -138,26 +138,26 @@ export default function ProductDetailScreen({ navigation, route }) {
               const isCheapest = idx === 0;
               return (
                 <View key={p.id} style={[styles.priceRow, isCheapest && styles.cheapestRow]}>
-                  {isCheapest && (
+                  {Boolean(isCheapest) ? (
                     <View style={styles.cheapestBadge}>
                       <Ionicons name="trophy" size={10} color={colors.cheapest} />
                       <Text style={styles.cheapestBadgeText}>CHEAPEST</Text>
                     </View>
-                  )}
+                  ) : null}
                   <View style={styles.priceRowContent}>
                     <Text style={styles.storeName}>{p.supermarketName}</Text>
                     <View style={styles.priceValues}>
-                      {p.isOnSale && (
-                        <Text style={styles.originalPrice}>LKR {p.price.toLocaleString('en-LK', { minimumFractionDigits: 2 })}</Text>
-                      )}
+                      {Boolean(p.isOnSale) ? (
+                        <Text style={styles.originalPrice}>{`LKR ${Number(p.price).toLocaleString('en-LK', { minimumFractionDigits: 2 })}`}</Text>
+                      ) : null}
                       <Text style={[styles.storePrice, isCheapest && styles.cheapestStorePrice]}>
-                        LKR {effectivePrice.toLocaleString('en-LK', { minimumFractionDigits: 2 })}
+                        {`LKR ${Number(effectivePrice).toLocaleString('en-LK', { minimumFractionDigits: 2 })}`}
                       </Text>
-                      {p.isOnSale && (
+                      {Boolean(p.isOnSale) ? (
                         <View style={styles.saleBadge}>
                           <Text style={styles.saleText}>SALE</Text>
                         </View>
-                      )}
+                      ) : null}
                     </View>
                   </View>
                   <View style={styles.priceBar}>

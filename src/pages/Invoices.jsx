@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 import {
   CheckCircleIcon, XCircleIcon, PencilSquareIcon,
   MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon,
-  DocumentTextIcon, CheckIcon, XMarkIcon,
+  DocumentTextIcon, CheckIcon, XMarkIcon, LinkIcon,
 } from '@heroicons/react/24/outline';
 
 const STATUS_META = {
@@ -28,6 +28,7 @@ function StatusBadge({ status }) {
 }
 
 export default function Invoices() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStatus = ['PENDING', 'REVIEW', 'VERIFIED', 'REJECTED', 'PROCESSING'].includes(searchParams.get('status'))
@@ -86,7 +87,7 @@ export default function Invoices() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Page Header */}
-      <div className="mb-8 flex items-start justify-between">
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <DocumentTextIcon className="w-7 h-7 text-primary" />
@@ -94,9 +95,19 @@ export default function Invoices() {
           </h1>
           <p className="text-gray-500 mt-1 text-sm">Review, correct and verify user-submitted receipts</p>
         </div>
-        {meta.total > 0 && (
-          <div className="bg-primary/10 text-primary rounded-xl px-4 py-2 text-sm font-semibold">{meta.total} total</div>
-        )}
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => navigate('/data-cleanup?tab=unverified')}
+            className="flex items-center gap-1.5 bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200 px-3.5 py-2 rounded-xl text-sm font-semibold transition-colors"
+            title="Batch match unverified receipt line items to products"
+          >
+            <LinkIcon className="w-4 h-4 text-blue-600" />
+            Unverified Items Matcher
+          </button>
+          {meta.total > 0 && (
+            <div className="bg-primary/10 text-primary rounded-xl px-4 py-2 text-sm font-semibold">{meta.total} total</div>
+          )}
+        </div>
       </div>
 
       {/* Filter Tabs */}

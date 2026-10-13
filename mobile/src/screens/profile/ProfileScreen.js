@@ -4,7 +4,7 @@ import {
   TextInput, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../store/authStore';
@@ -12,6 +12,7 @@ import { usersAPI } from '../../services/api';
 import { colors, typography, shadows } from '../../theme';
 
 export default function ProfileScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { user, logout, updateUser } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -54,6 +55,8 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const menuItems = [
+    { icon: 'wallet-outline', label: 'Grocery Expenses', onPress: () => navigation.navigate('Expenses') },
+    { icon: 'receipt-outline', label: 'Scanned Bills & Receipts', onPress: () => navigation.navigate('InvoiceList') },
     { icon: 'heart-outline', label: 'Favourite Products', onPress: () => navigation.navigate('Favourites') },
     { icon: 'notifications-outline', label: 'Notifications', onPress: () => navigation.navigate('Notifications') },
     { icon: 'pricetag-outline', label: 'Price Alerts', onPress: () => Alert.alert('Coming soon') },
@@ -66,7 +69,29 @@ export default function ProfileScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <LinearGradient colors={['#1B5E20', '#2E7D32']} style={styles.header}>
+        <LinearGradient
+          colors={['#1B5E20', '#2E7D32']}
+          style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 12 }]}
+        >
+          <View style={styles.topBackRow}>
+            {navigation.canGoBack() ? (
+              <TouchableOpacity
+                style={styles.backBtn}
+                onPress={() => navigation.goBack()}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+              >
+                <Ionicons name="arrow-back" size={24} color="#fff" />
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 38 }} />
+            )}
+            <Text style={styles.topHeaderTitle}>My Profile</Text>
+            <View style={{ width: 38 }} />
+          </View>
+
           <View style={styles.avatarContainer}>
             <LinearGradient colors={['#FF6F00', '#FF8F00']} style={styles.avatar}>
               <Text style={styles.avatarText}>{(user?.name || 'U')[0].toUpperCase()}</Text>
@@ -146,7 +171,23 @@ export default function ProfileScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  header: { paddingTop: 24, paddingBottom: 32, alignItems: 'center', paddingHorizontal: 20 },
+  header: { paddingTop: 12, paddingBottom: 32, alignItems: 'center', paddingHorizontal: 20 },
+  topBackRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topHeaderTitle: { ...typography.h3, color: '#fff', fontWeight: '700' },
   avatarContainer: { marginBottom: 12 },
   avatar: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' },
   avatarText: { fontSize: 32, fontWeight: '800', color: '#fff' },

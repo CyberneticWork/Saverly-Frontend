@@ -366,14 +366,12 @@ export default function ReceiptCropperModal({
 
               {/* Dimmed Surrounding Mask Panels */}
               <View
-                pointerEvents="none"
                 style={[
                   styles.maskPanel,
-                  { top: 0, left: 0, right: 0, height: Math.max(0, cropBox.y) },
+                  { top: 0, left: 0, right: 0, height: Math.max(0, cropBox.y), pointerEvents: 'none' },
                 ]}
               />
               <View
-                pointerEvents="none"
                 style={[
                   styles.maskPanel,
                   {
@@ -381,11 +379,11 @@ export default function ReceiptCropperModal({
                     left: 0,
                     right: 0,
                     bottom: 0,
+                    pointerEvents: 'none',
                   },
                 ]}
               />
               <View
-                pointerEvents="none"
                 style={[
                   styles.maskPanel,
                   {
@@ -393,11 +391,11 @@ export default function ReceiptCropperModal({
                     left: 0,
                     width: Math.max(0, cropBox.x),
                     height: cropBox.height,
+                    pointerEvents: 'none',
                   },
                 ]}
               />
               <View
-                pointerEvents="none"
                 style={[
                   styles.maskPanel,
                   {
@@ -405,6 +403,7 @@ export default function ReceiptCropperModal({
                     left: cropBox.x + cropBox.width,
                     right: 0,
                     height: cropBox.height,
+                    pointerEvents: 'none',
                   },
                 ]}
               />
@@ -556,10 +555,10 @@ export default function ReceiptCropperModal({
             {isProcessing ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <>
-                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginRight: 6 }} />
                 <Text style={styles.doneBtnText}>Done & Save</Text>
-              </>
+              </View>
             )}
           </TouchableOpacity>
         </View>

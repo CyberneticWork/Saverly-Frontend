@@ -145,10 +145,10 @@ export default function LoginScreen({ navigation }) {
                 {isLoading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <>
-                    <Ionicons name="log-in-outline" size={20} color="#fff" />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="log-in-outline" size={20} color="#fff" style={{ marginRight: 6 }} />
                     <Text style={styles.loginBtnText}>Sign In</Text>
-                  </>
+                  </View>
                 )}
               </TouchableOpacity>
 

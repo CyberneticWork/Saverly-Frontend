@@ -4,12 +4,13 @@ import {
   ActivityIndicator, Alert, Modal, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useShoppingStore } from '../../store/shoppingStore';
 import { colors, typography, shadows } from '../../theme';
 
 export default function ShoppingListScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { lists, isLoading, fetchLists, createList, deleteList } = useShoppingStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [newListName, setNewListName] = useState('');
@@ -71,10 +72,29 @@ export default function ShoppingListScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <LinearGradient colors={['#1B5E20', '#2E7D32']} style={styles.header}>
-        <Text style={styles.headerTitle}>Shopping Lists</Text>
-        <Text style={styles.headerSub}>Manage and optimise your shopping</Text>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <LinearGradient
+        colors={['#1B5E20', '#2E7D32']}
+        style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 12 }]}
+      >
+        <View style={styles.headerTopRow}>
+          {Boolean(navigation.canGoBack()) ? (
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          ) : null}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Shopping Lists</Text>
+            <Text style={styles.headerSub}>Manage and optimise your shopping</Text>
+          </View>
+        </View>
       </LinearGradient>
 
       {isLoading ? (
@@ -132,9 +152,22 @@ export default function ShoppingListScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: 20, paddingBottom: 24, paddingTop: 8 },
+  header: { paddingHorizontal: 16, paddingBottom: 20, paddingTop: 10 },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   headerTitle: { ...typography.h2, color: '#fff' },
-  headerSub: { ...typography.body, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
+  headerSub: { ...typography.body, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   listContent: { padding: 16, paddingBottom: 100 },
   listCard: {
     flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#fff',

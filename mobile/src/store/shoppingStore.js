@@ -34,13 +34,21 @@ export const useShoppingStore = create((set, get) => ({
     }
   },
 
-  addItem: async (listId, productId, quantity, unit) => {
-    const { data } = await shoppingListsAPI.addItem(listId, { productId, quantity, unit });
+  addItem: async (listId, productId, quantity = 1, unit = 'unit', extra = {}) => {
+    const payload = typeof productId === 'object' && productId !== null
+      ? productId
+      : { productId, quantity, unit, ...extra };
+    const { data } = await shoppingListsAPI.addItem(listId, payload);
     set(state => ({
       currentList: state.currentList
         ? {
             ...state.currentList,
-            items: [...(state.currentList.items || []).filter(i => i.product.id !== productId), data.data],
+            items: [
+              ...(state.currentList.items || []).filter(
+                i => i.id !== data.data.id && (data.data.product?.id ? i.product?.id !== data.data.product.id : true)
+              ),
+              data.data,
+            ],
           }
         : null,
     }));

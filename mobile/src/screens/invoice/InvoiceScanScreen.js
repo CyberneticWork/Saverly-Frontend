@@ -92,7 +92,7 @@ function extractInvoiceIdFromResponse(res) {
   return payload.invoiceId || payload.id || payload?.invoice?.id || null;
 }
 
-export default function InvoiceScanScreen({ navigation }) {
+export default function InvoiceScanScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState('picker'); // 'picker' | 'camera'
   const [hasPermission, setHasPermission] = useState(null);
@@ -135,20 +135,14 @@ export default function InvoiceScanScreen({ navigation }) {
     }
   }, [mode]);
 
-  const handleImageSelected = (uri) => {
+  const handleImageSelected = (uri, autoScan = true) => {
     if (!uri) return;
     setOriginalImage(uri);
     setSelectedImage(uri);
     setMode('picker');
-    Alert.alert(
-      'Receipt Captured',
-      'Would you like to crop and straighten the receipt before scanning?',
-      [
-        { text: 'Crop Receipt', onPress: () => setIsCropperVisible(true) },
-        { text: 'Continue as is', style: 'default' },
-      ],
-      { cancelable: true }
-    );
+    if (autoScan) {
+      handleUpload(uri);
+    }
   };
 
   const handleQuickRotate = async () => {
@@ -178,7 +172,7 @@ export default function InvoiceScanScreen({ navigation }) {
         quality: 0.9,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
-        handleImageSelected(result.assets[0].uri);
+        handleImageSelected(result.assets[0].uri, true);
       }
     } catch (err) {
       console.error('System camera error:', err);
@@ -198,7 +192,7 @@ export default function InvoiceScanScreen({ navigation }) {
           'Camera access is needed to scan receipts. You can also use the system camera or choose from gallery.',
           [
             { text: 'System Camera', onPress: takeWithNativeCamera },
-            { text: 'Choose from Gallery', onPress: pickImage },
+            { text: 'Choose from Gallery', onPress: () => pickImage(true) },
             { text: 'Cancel', style: 'cancel' },
           ]
         );
@@ -209,14 +203,18 @@ export default function InvoiceScanScreen({ navigation }) {
     }
   };
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType?.Images || ['images'],
-      allowsEditing: false, // Keep full receipt image
-      quality: 0.9,
-    });
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      handleImageSelected(result.assets[0].uri);
+  const pickImage = async (autoScan = true) => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaType?.Images || ['images'],
+        allowsEditing: false, // Keep full receipt image
+        quality: 0.9,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        handleImageSelected(result.assets[0].uri, autoScan);
+      }
+    } catch (err) {
+      console.warn('pickImage error:', err);
     }
   };
 
@@ -226,7 +224,7 @@ export default function InvoiceScanScreen({ navigation }) {
       setIsCapturing(true);
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
       if (photo?.uri) {
-        handleImageSelected(photo.uri);
+        handleImageSelected(photo.uri, true);
       }
     } catch (err) {
       console.error('Take picture error:', err);
@@ -243,8 +241,33 @@ export default function InvoiceScanScreen({ navigation }) {
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedImage) return;
+  useEffect(() => {
+    const initialUri = route?.params?.initialImageUri;
+    const shouldAutoScan = route?.params?.autoScan;
+
+    if (initialUri) {
+      setOriginalImage(initialUri);
+      setSelectedImage(initialUri);
+      setMode('picker');
+      if (shouldAutoScan) {
+        handleUpload(initialUri);
+      }
+      return;
+    }
+
+    const auto = route?.params?.autoLaunch;
+    if (auto === 'camera') {
+      takeWithNativeCamera();
+    } else if (auto === 'liveCamera') {
+      requestCamera();
+    } else if (auto === 'gallery') {
+      pickImage(true);
+    }
+  }, [route?.params?.autoLaunch, route?.params?.initialImageUri, route?.params?.timestamp]);
+
+  const handleUpload = async (overrideUri) => {
+    const targetUri = overrideUri || selectedImage;
+    if (!targetUri) return;
     setIsUploading(true);
     setUploadStatus('Preparing image…');
     try {
@@ -258,7 +281,7 @@ export default function InvoiceScanScreen({ navigation }) {
           let base64 = null;
           try {
             const img = await ImageManipulator.manipulateAsync(
-              selectedImage,
+              targetUri,
               [{ resize: { width: 1600 } }],
               { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true }
             );
@@ -282,10 +305,10 @@ export default function InvoiceScanScreen({ navigation }) {
       // 2. Fallback to Server-Side OCR (Tesseract / Server pipeline)
       if (!invoiceId) {
         setUploadStatus('Processing image…');
-        let uploadUri = selectedImage;
+        let uploadUri = targetUri;
         try {
           const manipulated = await ImageManipulator.manipulateAsync(
-            selectedImage,
+            targetUri,
             [{ resize: { width: 1600 } }],
             { compress: 0.88, format: ImageManipulator.SaveFormat.JPEG }
           );
@@ -342,16 +365,23 @@ export default function InvoiceScanScreen({ navigation }) {
         />
 
         {/* Fullscreen UI Overlay positioned on top of the native camera preview */}
-        <View style={styles.cameraUI} pointerEvents="box-none">
+        <View style={[styles.cameraUI, { pointerEvents: 'box-none' }]}>
           {/* Top Controls Bar */}
           <View style={[styles.cameraTopBar, { paddingTop: Math.max(insets.top + 8, 54) }]}>
             <TouchableOpacity
               style={styles.cameraRoundBtn}
-              onPress={() => setMode('picker')}
+              onPress={() => {
+                if (navigation.canGoBack()) {
+                  navigation.goBack();
+                } else {
+                  navigation.navigate('Home', { screen: 'HomeMain' });
+                }
+              }}
               activeOpacity={0.7}
-              accessibilityLabel="Close camera"
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
-              <Ionicons name="close" size={26} color="#fff" />
+              <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
 
             <View style={styles.cameraTitlePill}>
@@ -370,7 +400,7 @@ export default function InvoiceScanScreen({ navigation }) {
           </View>
 
           {/* Viewfinder Receipt Frame */}
-          <View style={styles.cameraFrameWrapper} pointerEvents="none">
+          <View style={[styles.cameraFrameWrapper, { pointerEvents: 'none' }]}>
             <View style={styles.cameraFrame}>
               <View style={styles.cornerTL} />
               <View style={styles.cornerTR} />
@@ -447,7 +477,29 @@ export default function InvoiceScanScreen({ navigation }) {
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <LinearGradient colors={['#1B5E20', '#2E7D32']} style={styles.hero}>
+        <LinearGradient
+          colors={['#1B5E20', '#2E7D32']}
+          style={[styles.hero, { paddingTop: Math.max(insets.top, 16) + 12 }]}
+        >
+          <View style={styles.heroTopRow}>
+            <TouchableOpacity
+              style={styles.heroBackBtn}
+              onPress={() => {
+                if (navigation.canGoBack()) {
+                  navigation.goBack();
+                } else {
+                  navigation.navigate('Home', { screen: 'HomeMain' });
+                }
+              }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }} />
+          </View>
           <Text style={styles.heroIcon}>📄</Text>
           <Text style={styles.heroTitle}>Scan Receipt</Text>
           <Text style={styles.heroSub}>Scan a grocery receipt and we'll automatically extract product prices to help you compare</Text>
@@ -457,12 +509,12 @@ export default function InvoiceScanScreen({ navigation }) {
           <View style={styles.previewContainer}>
             <View style={styles.previewImageCard}>
               <Image source={{ uri: selectedImage }} style={styles.previewImage} resizeMode="contain" />
-              {originalImage && originalImage !== selectedImage && (
+              {Boolean(originalImage && originalImage !== selectedImage) ? (
                 <View style={styles.croppedBadge}>
                   <Ionicons name="checkmark-circle" size={14} color="#10B981" />
                   <Text style={styles.croppedBadgeText}>Cropped</Text>
                 </View>
-              )}
+              ) : null}
             </View>
 
             {/* Quick Actions Row */}
@@ -487,7 +539,7 @@ export default function InvoiceScanScreen({ navigation }) {
             </View>
 
             <View style={styles.previewSubActionsRow}>
-              {originalImage && originalImage !== selectedImage && (
+              {Boolean(originalImage && originalImage !== selectedImage) ? (
                 <TouchableOpacity
                   style={styles.previewSubBtn}
                   onPress={() => setSelectedImage(originalImage)}
@@ -496,7 +548,7 @@ export default function InvoiceScanScreen({ navigation }) {
                   <Ionicons name="arrow-undo-outline" size={16} color={colors.textSecondary} />
                   <Text style={styles.previewSubBtnText}>Reset to Original</Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
 
               <TouchableOpacity
                 style={styles.previewSubBtn}
@@ -581,27 +633,38 @@ export default function InvoiceScanScreen({ navigation }) {
         </TouchableOpacity>
       </ScrollView>
 
-      {selectedImage && (
+      {Boolean(selectedImage) ? (
         <View style={styles.uploadBar}>
           <TouchableOpacity
             style={[styles.uploadBtn, isUploading && styles.uploadBtnDisabled]}
-            onPress={handleUpload}
+            onPress={() => handleUpload()}
             disabled={isUploading}
           >
             {isUploading ? (
-              <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                 <ActivityIndicator size="small" color="#fff" />
                 <Text style={styles.uploadBtnText}>{uploadStatus || 'Scanning…'}</Text>
-              </>
+              </View>
             ) : (
-              <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name="scan" size={20} color="#fff" />
                 <Text style={styles.uploadBtnText}>Scan & Extract Prices</Text>
-              </>
+              </View>
             )}
           </TouchableOpacity>
         </View>
-      )}
+      ) : null}
+
+      {/* Auto-Scan Processing Overlay */}
+      {Boolean(isUploading) ? (
+        <View style={styles.uploadingModalOverlay}>
+          <View style={styles.uploadingModalCard}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.uploadingModalTitle}>Scanning Receipt…</Text>
+            <Text style={styles.uploadingModalSub}>{uploadStatus || 'Extracting products & prices…'}</Text>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -782,7 +845,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   content: { paddingBottom: 100 },
-  hero: { padding: 32, alignItems: 'center' },
+  hero: { padding: 24, paddingTop: 16, alignItems: 'center' },
+  heroTopRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  heroBackBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   heroIcon: { fontSize: 56, marginBottom: 12 },
   heroTitle: { ...typography.h2, color: '#fff', textAlign: 'center' },
   heroSub: { ...typography.body, color: 'rgba(255,255,255,0.85)', textAlign: 'center', marginTop: 8 },
@@ -903,4 +980,32 @@ const styles = StyleSheet.create({
   uploadBtn: { backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
   uploadBtnDisabled: { opacity: 0.7 },
   uploadBtnText: { ...typography.button, color: '#fff' },
+  uploadingModalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+    elevation: 999,
+  },
+  uploadingModalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 28,
+    alignItems: 'center',
+    width: 270,
+    ...shadows.lg,
+  },
+  uploadingModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 14,
+  },
+  uploadingModalSub: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 6,
+  },
 });

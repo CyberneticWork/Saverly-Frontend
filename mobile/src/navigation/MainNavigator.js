@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +21,9 @@ import NearbyStoresScreen from '../screens/map/NearbyStoresScreen';
 import FavouritesScreen from '../screens/favourites/FavouritesScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import ProductDetailScreen from '../screens/search/ProductDetailScreen';
+import BudgetAnalyticsScreen from '../screens/budget/BudgetAnalyticsScreen';
+import ExpensesScreen from '../screens/expenses/ExpensesScreen';
+import CompanyPricesScreen from '../screens/company/CompanyPricesScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -33,9 +36,13 @@ function HomeStack() {
   return (
     <Stack.Navigator screenOptions={stackOptions}>
       <Stack.Screen name="HomeMain" component={HomeScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="CompanyPrices" component={CompanyPricesScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="CommunityPrices" component={CompanyPricesScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Expenses" component={ExpensesScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="BudgetAnalytics" component={BudgetAnalyticsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ title: 'Product Details' }} />
-      <Stack.Screen name="PriceCompare" component={PriceCompareScreen} options={{ title: 'Price Comparison' }} />
-      <Stack.Screen name="NearbyStores" component={NearbyStoresScreen} options={{ title: 'Nearby Stores' }} />
+      <Stack.Screen name="PriceCompare" component={PriceCompareScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="NearbyStores" component={NearbyStoresScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
       <Stack.Screen name="Favourites" component={FavouritesScreen} options={{ title: 'My Favourites' }} />
     </Stack.Navigator>
@@ -46,9 +53,12 @@ function SearchStack() {
   return (
     <Stack.Navigator screenOptions={stackOptions}>
       <Stack.Screen name="SearchMain" component={SearchScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="CompanyPrices" component={CompanyPricesScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="CommunityPrices" component={CompanyPricesScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ title: 'Product Details' }} />
-      <Stack.Screen name="PriceCompare" component={PriceCompareScreen} options={{ title: 'Price Comparison' }} />
+      <Stack.Screen name="PriceCompare" component={PriceCompareScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ShoppingListScan" component={ShoppingListScanScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="NearbyStores" component={NearbyStoresScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
@@ -58,8 +68,9 @@ function ShoppingStack() {
     <Stack.Navigator screenOptions={stackOptions}>
       <Stack.Screen name="ShoppingListMain" component={ShoppingListScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ShoppingListDetail" component={ShoppingListDetailScreen} options={{ title: 'Shopping List' }} />
-      <Stack.Screen name="ShoppingListOptimize" component={ShoppingListOptimizeScreen} options={{ title: 'Best Store Finder' }} />
+      <Stack.Screen name="ShoppingListOptimize" component={ShoppingListOptimizeScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ title: 'Product Details' }} />
+      <Stack.Screen name="PriceCompare" component={PriceCompareScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
@@ -68,8 +79,12 @@ function InvoiceStack() {
   return (
     <Stack.Navigator screenOptions={stackOptions}>
       <Stack.Screen name="InvoiceList" component={InvoiceListScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="InvoiceScan" component={InvoiceScanScreen} options={{ title: 'Scan Invoice', headerTransparent: true, headerTintColor: '#fff' }} />
+      <Stack.Screen name="InvoiceScan" component={InvoiceScanScreen} options={{ headerShown: false }} />
       <Stack.Screen name="InvoiceReview" component={InvoiceReviewScreen} options={{ title: 'Review Invoice' }} />
+      <Stack.Screen name="CompanyPrices" component={CompanyPricesScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="CommunityPrices" component={CompanyPricesScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Expenses" component={ExpensesScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="PriceCompare" component={PriceCompareScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
@@ -78,19 +93,46 @@ function ProfileStack() {
   return (
     <Stack.Navigator screenOptions={stackOptions}>
       <Stack.Screen name="ProfileMain" component={ProfileScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Expenses" component={ExpensesScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
       <Stack.Screen name="Favourites" component={FavouritesScreen} options={{ title: 'My Favourites' }} />
-      <Stack.Screen name="InvoiceList" component={InvoiceListScreen} options={{ title: 'My Invoices' }} />
+      <Stack.Screen name="InvoiceList" component={InvoiceListScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="NearbyStores" component={NearbyStoresScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
 
-const stackOptions = {
-  headerStyle: { backgroundColor: colors.primary },
+const stackOptions = ({ navigation }) => ({
+  headerStyle: {
+    backgroundColor: colors.primary,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
   headerTintColor: '#fff',
-  headerTitleStyle: { ...typography.h4, color: '#fff' },
+  headerTitleStyle: { ...typography.h4, color: '#fff', fontWeight: '700' },
   headerBackTitleVisible: false,
-};
+  headerLeft: (props) => (
+    <TouchableOpacity
+      onPress={() => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Home', { screen: 'HomeMain' });
+        }
+      }}
+      style={styles.headerBackBtn}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel="Go back"
+    >
+      <Ionicons name="arrow-back" size={24} color={props?.tintColor || '#fff'} />
+    </TouchableOpacity>
+  ),
+});
 
 export default function MainNavigator() {
   return (
@@ -107,7 +149,10 @@ export default function MainNavigator() {
       <Tab.Screen
         name="Home"
         component={HomeStack}
-        options={{ tabBarIcon: tabBarIcon('home') }}
+        options={{
+          tabBarLabel: 'Home',
+          tabBarIcon: tabBarIcon('home'),
+        }}
       />
       <Tab.Screen
         name="Search"
@@ -172,6 +217,13 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     backgroundColor: colors.primaryFaded,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerBackBtn: {
+    marginLeft: Platform.OS === 'web' ? 12 : 8,
+    padding: 8,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',

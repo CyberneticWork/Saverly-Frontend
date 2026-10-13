@@ -180,7 +180,7 @@ export default function ShoppingListScanScreen({ navigation }) {
     return (
       <View style={styles.cameraContainer}>
         <CameraView style={StyleSheet.absoluteFillObject} ref={cameraRef} facing="back" />
-        <SafeAreaView style={[StyleSheet.absoluteFillObject, styles.cameraUI]} edges={['top', 'bottom']} pointerEvents="box-none">
+        <SafeAreaView style={[StyleSheet.absoluteFillObject, styles.cameraUI, { pointerEvents: 'box-none' }]} edges={['top', 'bottom']}>
           <View style={styles.cameraTopRow}>
             <TouchableOpacity style={styles.cameraBack} onPress={() => setMode('options')}>
               <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -189,7 +189,7 @@ export default function ShoppingListScanScreen({ navigation }) {
               <Ionicons name="camera-outline" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
-          <View style={styles.cameraFrameWrapper} pointerEvents="none">
+          <View style={[styles.cameraFrameWrapper, { pointerEvents: 'none' }]}>
             <View style={styles.cameraFrame}>
               <View style={styles.cornerTL} />
               <View style={styles.cornerTR} />
@@ -212,9 +212,9 @@ export default function ShoppingListScanScreen({ navigation }) {
     return (
       <View style={styles.processingContainer}>
         <LinearGradient colors={[colors.primary, colors.primaryDark]} style={StyleSheet.absoluteFill} />
-        {capturedImage && (
+        {Boolean(capturedImage) ? (
           <Image source={{ uri: capturedImage }} style={styles.processingImg} resizeMode="cover" />
-        )}
+        ) : null}
         <View style={styles.processingOverlay}>
           <ActivityIndicator size="large" color="#fff" />
           <Text style={styles.processingTitle}>Reading your list…</Text>
@@ -254,7 +254,7 @@ export default function ShoppingListScanScreen({ navigation }) {
               <View style={styles.itemNameRow}>
                 <View style={styles.itemDot} />
                 <Text style={styles.itemName}>{item.name}</Text>
-                {item.loading && <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 8 }} />}
+                {Boolean(item.loading) ? <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 8 }} /> : null}
               </View>
 
               {/* Matched products */}

@@ -4,12 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import {
   HomeIcon, CubeIcon, BuildingStorefrontIcon,
   DocumentTextIcon, UsersIcon, TagIcon, Bars3Icon,
-  ArrowRightOnRectangleIcon,
+  ArrowRightOnRectangleIcon, SparklesIcon,
 } from '@heroicons/react/24/outline';
 
 const navItems = [
   { to: '/dashboard', icon: HomeIcon, label: 'Dashboard' },
   { to: '/products', icon: CubeIcon, label: 'Products' },
+  { to: '/data-cleanup', icon: SparklesIcon, label: 'Data Cleanup' },
   { to: '/supermarkets', icon: BuildingStorefrontIcon, label: 'Supermarkets' },
   { to: '/prices', icon: TagIcon, label: 'Price Records' },
   { to: '/invoices', icon: DocumentTextIcon, label: 'Invoices' },

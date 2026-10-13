@@ -10,6 +10,7 @@ import Supermarkets from './pages/Supermarkets';
 import Invoices from './pages/Invoices';
 import Users from './pages/Users';
 import PriceRecords from './pages/PriceRecords';
+import DataCleanup from './pages/DataCleanup';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -27,6 +28,7 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="products" element={<Products />} />
+            <Route path="data-cleanup" element={<DataCleanup />} />
             <Route path="supermarkets" element={<Supermarkets />} />
             <Route path="invoices" element={<Invoices />} />
             <Route path="users" element={<Users />} />
